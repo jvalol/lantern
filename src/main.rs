@@ -1,5 +1,6 @@
 //! A dark maze and two lamps to light it with. See `specs/`.
 
+mod brazier;
 mod candle;
 mod lamps;
 mod lantern_game;

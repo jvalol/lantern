@@ -27,10 +27,26 @@ const WAX_LOOK: glam::Vec4 = vec4(0.92, 0.88, 0.76, 1.0);
 /// The flame. The engine has no per-object emissive, but colour multiplies the
 /// ambient term as well as the diffuse one, so a large colour against a dim
 /// ambient is what makes it look lit from inside.
-const FLAME_LOOK: glam::Vec4 = vec4(34.0, 26.0, 12.0, 1.0);
+const FLAME_LOOK: glam::Vec4 = vec4(170.0, 130.0, 60.0, 1.0);
+
+/// How much light there is with nothing lighting it.
+///
+/// This is the one number that decides whether a wall you have no light on is
+/// visible. At 0.03 the whole maze was faintly there at once, walls and
+/// distance no object, which looks like light bleeding through stone.
+///
+/// It cannot simply go to nothing, because a flame is drawn by multiplying it:
+/// no ambient, no flame. Dropping it means multiplying the flames back up by
+/// the same amount, which is what separates the two.
+const AMBIENT: f32 = 0.006;
 
 /// The hand holding a candle, warm and close to the flame lighting it.
 const HAND_LOOK: glam::Vec4 = vec4(0.78, 0.56, 0.42, 1.0);
+
+/// The braziers already burning in the maze: cold iron, and a cold flame, so
+/// they read as someone else's light rather than a candle you dropped.
+const BRAZIER_LOOK: glam::Vec4 = vec4(0.26, 0.28, 0.34, 1.0);
+const BRAZIER_FLAME_LOOK: glam::Vec4 = vec4(40.0, 55.0, 100.0, 1.0);
 
 /// Which way to look at the start: down a way out of the first cell, rather
 /// than at whichever wall happens to be ahead.
@@ -59,6 +75,8 @@ pub struct LanternGame {
     wax: Option<MeshId>,
     flame: Option<MeshId>,
     hand: Option<MeshId>,
+    brazier: Option<MeshId>,
+    brazier_flame: Option<MeshId>,
     player: Player,
     lamps: Lamps,
 
@@ -76,7 +94,14 @@ pub struct LanternGame {
 impl LanternGame {
     pub fn new() -> Self {
         let maze = Maze::carve(&mut StdRng::from_entropy());
-        let walls = walls::colliders(&maze);
+        // the braziers stand in the maze, so they stop you and stop a candle
+        // the same way a wall does
+        let mut walls = walls::colliders(&maze);
+        walls.extend(
+            lights::fixed_cells(&maze)
+                .into_iter()
+                .map(|cell| crate::brazier::solid(cell_centre(cell))),
+        );
         let mut player = Player::at(cell_centre(maze.start));
         player.yaw = facing_a_way_out(&maze);
 
@@ -87,6 +112,8 @@ impl LanternGame {
             wax: None,
             flame: None,
             hand: None,
+            brazier: None,
+            brazier_flame: None,
             player,
             lamps: Lamps::new(),
             held: [false; 6],
@@ -155,6 +182,8 @@ impl Game for LanternGame {
         self.wax = Some(renderer.add_mesh(&crate::candle::wax()));
         self.flame = Some(renderer.add_mesh(&crate::candle::flame()));
         self.hand = Some(renderer.add_mesh(&crate::candle::hand()));
+        self.brazier = Some(renderer.add_mesh(&crate::brazier::stand()));
+        self.brazier_flame = Some(renderer.add_mesh(&crate::brazier::flame()));
 
         let reach = maze::WIDTH as f32 * walls::CELL;
         renderer.set_scene_bounds(Aabb::new(
@@ -237,7 +266,7 @@ impl Game for LanternGame {
         // no sun. The maze is lit by the lamps and the dim fixed ones, which is
         // the whole point of it being dark.
         scene.light.intensity = 0.0;
-        scene.light.ambient = Vec3::splat(0.03);
+        scene.light.ambient = Vec3::splat(AMBIENT);
 
         scene.push_colored(mesh, &Transform::default(), WALL_COLOR);
 
@@ -250,6 +279,20 @@ impl Game for LanternGame {
             self.player.right(),
             &self.walls,
         );
+
+        // the fixed lights, with something making each of them. A light with
+        // nothing at it reads as a smear rather than a lamp.
+        if let (Some(stand), Some(lit)) = (self.brazier, self.brazier_flame) {
+            for cell in lights::fixed_cells(&self.maze) {
+                let foot = cell_centre(cell);
+                scene.push_colored(stand, &Transform::at(foot), BRAZIER_LOOK);
+                scene.push_colored(
+                    lit,
+                    &Transform::at(foot + Vec3::Y * crate::brazier::FLAME_AT),
+                    BRAZIER_FLAME_LOOK,
+                );
+            }
+        }
 
         if let (Some(wax), Some(flame), Some(hand)) = (self.wax, self.flame, self.hand) {
             let standing = self

@@ -120,7 +120,7 @@ pub fn hand() -> MeshData {
 ///
 /// Scaling a mesh non-uniformly and keeping its normals leaves them pointing
 /// the wrong way, which lights it wrong; they take the inverse scale.
-fn stretched(mesh: MeshData, size: Vec3) -> MeshData {
+pub fn stretched(mesh: MeshData, size: Vec3) -> MeshData {
     let vertices = mesh
         .vertices
         .iter()

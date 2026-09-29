@@ -56,10 +56,26 @@ turns into six shadow passes each. A lamp standing in the maze lights the
 corridor it is in and throws every wall corner across the floor. A lamp in hand
 lights where you are.
 
-**Fixed lights that do not cast.** A handful, at most eight in total per spec
-0020 counting the two that cast, so a corridor with no lamp in it is dim rather
-than black. They are the reason the maze is navigable at all without spending a
-lamp, and the reason spending one is worth it.
+**Fixed lights that do not cast.** Six, which with the two lamps is spec 0020's
+eight. They mark places in the maze rather than lighting the way between them.
+
+A light that cannot cast cannot be hidden by a wall, so the only thing keeping
+one out of the corridor next door is its range running out first. At seven it
+lit 123 cells and 92 of them were through stone, which is a glow with no source
+and no explanation. From a cell centre a wall's far face is half a cell plus its
+thickness away, so a range under that lights its own cell and nothing beyond it.
+
+The centre is the only place this works. Anything mounted on a wall has that
+wall at no distance at all and shines through it whatever the range, which is
+why these are braziers standing in the room and not sconces.
+
+**Each one is something you can see.** A brazier, cold iron with a cold flame,
+so it reads as light that was already here rather than a candle you dropped. It
+is solid, so you walk around it, and it never stands where you start or finish.
+
+What this costs: six lit cells instead of a hundred and twenty three. The maze
+between them is dark, and the braziers are landmarks to steer by rather than
+lighting to walk by.
 
 **The range is what makes light a resource.** A lamp reaches a few cells, not
 the whole maze. Nothing about this is enforced by the engine; it is the number
@@ -85,6 +101,13 @@ that decides whether the game is a decision or a walk.
 - A hand closes round the wax. — `candle::tests::the_hand_is_wide_enough_to_hold_the_wax`
 - Space puts one down, and takes it back. — `lantern_game::tests::space_puts_one_down_and_takes_it_back`
 - Space takes up before it puts down. — `lantern_game::tests::space_takes_up_before_it_puts_down`
+- A fixed light cannot reach past a wall. — `lights::tests::a_fixed_light_cannot_reach_past_a_wall`
+- And measured rather than argued: nothing it lights is behind stone. — `lights::tests::no_fixed_light_shines_through_stone`
+- It still reaches the floor it stands on. — `lights::tests::a_fixed_light_still_lights_its_own_floor`
+- Nothing solid stands where you start or finish. — `lights::tests::nothing_stands_where_you_start_or_finish`
+- A brazier stands on the floor. — `brazier::tests::it_stands_on_the_floor`
+- Its flame clears its bowl. — `brazier::tests::its_flame_clears_its_bowl`
+- You can walk past one in a corridor. — `brazier::tests::you_can_walk_past_one_in_a_corridor`
 - A lamp put down lights the cell it stands in. — `lights::tests::a_standing_lamp_lights_its_cell`
 - A carried lamp lights where you are. — `lights::tests::a_carried_lamp_follows_you`
 - Both lamps cast, and nothing else does. — `lights::tests::only_the_two_cast`
@@ -95,8 +118,8 @@ are dropped, so a ninth light is not an error, it is a lamp that stops working.
 
 ### Verified by hand
 
-- A corridor with no lamp is dim enough to want lighting and light enough to
-  walk.
+- A corridor with no lamp is dark, and a brazier is visible from far enough
+  down one to be worth walking towards.
 - A lamp set down throws the corridor's corners onto the walls and floor. This
   is spec 0022 doing the thing only the cubes example has asked of it.
 - Walking away from a lamp, the light falls off and the maze closes back in.

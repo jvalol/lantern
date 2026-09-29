@@ -7,7 +7,7 @@ use glam::{vec3, Vec3};
 
 use crate::lamps::Lamps;
 use crate::maze::{self, Maze};
-use crate::walls::{cell_centre, TALL};
+use crate::walls::cell_centre;
 
 /// How far a lamp reaches. The number that decides whether this is a game: far
 /// enough and you never put one down, short enough and you walk in a bubble.
@@ -15,9 +15,15 @@ pub const LAMP_RANGE: f32 = 9.0;
 pub const LAMP_COLOR: Vec3 = vec3(1.0, 0.86, 0.62);
 pub const LAMP_INTENSITY: f32 = 0.5;
 
-/// The dim ones, which do not cast. Few, and weak enough that a corridor is
-/// worth lighting.
-pub const FIXED_RANGE: f32 = 7.0;
+/// The dim ones, which do not cast, and so cannot be hidden by a wall. The only
+/// thing that keeps one out of the corridor next door is its range running out
+/// before it gets there.
+///
+/// From a cell centre the near face of a wall is half a cell away and the far
+/// face is half a cell plus its thickness, so anything under that lights its own
+/// cell and nothing beyond it. At seven it lit 123 cells, 92 of them through
+/// stone, which is the glow that looked like a bug.
+pub const FIXED_RANGE: f32 = 1.55;
 pub const FIXED_COLOR: Vec3 = vec3(0.42, 0.48, 0.70);
 pub const FIXED_INTENSITY: f32 = 0.22;
 
@@ -30,21 +36,36 @@ const HEIGHT: f32 = STANDS;
 ///
 /// Six, leaving room for the two lamps inside spec 0020's eight. A ninth light
 /// is not an error, it is a lamp that quietly stops working.
-pub fn fixed(maze: &Maze) -> Vec<PointLight> {
+pub fn fixed_cells(maze: &Maze) -> Vec<usize> {
     let count = MAX_POINT_LIGHTS - crate::lamps::LAMPS;
 
     // never at a dead end: a light down a stub lights a place nobody needs to
     // see, and the point of these is to make the through routes walkable
+    // nor where you stand at the start or finish: something solid in the cell
+    // you spawn in is something you spawn inside
     let ends = maze.dead_ends();
-    let open: Vec<usize> = (0..maze::CELLS).filter(|c| !ends.contains(c)).collect();
+    let open: Vec<usize> = (0..maze::CELLS)
+        .filter(|c| !ends.contains(c) && *c != maze.start && *c != maze.exit)
+        .collect();
     let step = open.len() / (count + 1);
 
-    (1..=count)
-        .map(|n| {
-            let cell = open[(n * step) % open.len()];
-            let at = cell_centre(cell) + Vec3::Y * TALL * 0.75;
-            PointLight::new(at, FIXED_COLOR, FIXED_INTENSITY, FIXED_RANGE)
-        })
+    (1..=count).map(|n| open[(n * step) % open.len()]).collect()
+}
+
+/// Where a brazier's flame stands in a cell, which is where its light is.
+///
+/// The centre, and only the centre. It is the one place equidistant from all
+/// four walls, so it is the only place a range cutoff can hold the light in.
+/// Anything against a wall has that wall at no distance at all and shines
+/// through it whatever the range.
+pub fn brazier_at(cell: usize) -> Vec3 {
+    cell_centre(cell) + Vec3::Y * crate::brazier::FLAME_AT
+}
+
+pub fn fixed(maze: &Maze) -> Vec<PointLight> {
+    fixed_cells(maze)
+        .into_iter()
+        .map(|cell| PointLight::new(brazier_at(cell), FIXED_COLOR, FIXED_INTENSITY, FIXED_RANGE))
         .collect()
 }
 
@@ -343,6 +364,81 @@ mod tests {
                 .expect("cells exist");
 
             assert!(!ends.contains(&at), "a light sits at a dead end");
+        }
+    }
+
+    #[test]
+    fn nothing_stands_where_you_start_or_finish() {
+        for seed in 0..20 {
+            let maze = Maze::carve(&mut StdRng::seed_from_u64(seed));
+            let standing = fixed_cells(&maze);
+
+            assert!(!standing.contains(&maze.start), "a brazier at the start");
+            assert!(!standing.contains(&maze.exit), "a brazier at the exit");
+        }
+    }
+
+    #[test]
+    fn a_fixed_light_cannot_reach_past_a_wall() {
+        // it cannot cast, so a wall does not stop it. Its range has to.
+        let reach = crate::walls::CELL * 0.5 + crate::walls::THICK;
+
+        assert!(
+            FIXED_RANGE < reach,
+            "at {} it reaches {} past the far face of its own walls",
+            FIXED_RANGE,
+            FIXED_RANGE - reach
+        );
+    }
+
+    #[test]
+    fn no_fixed_light_shines_through_stone() {
+        // the same thing measured rather than argued: nothing a fixed light
+        // touches is on the far side of a wall from it
+        use blitzkit::collision::Ray;
+
+        let maze = maze();
+        let walls = crate::walls::colliders(&maze);
+        let mut through = 0;
+
+        for light in fixed(&maze) {
+            for cell in 0..maze::CELLS {
+                for height in [0.0f32, 1.0, crate::walls::TALL] {
+                    let at = cell_centre(cell) + Vec3::Y * height;
+                    let gap = at - light.position;
+                    if gap.length() > light.range {
+                        continue;
+                    }
+                    let blocked = walls.iter().any(|wall| {
+                        Ray::new(light.position, gap)
+                            .hit_aabb(wall)
+                            .is_some_and(|hit| hit.distance < gap.length())
+                    });
+                    if blocked {
+                        through += 1;
+                    }
+                }
+            }
+        }
+
+        assert_eq!(through, 0, "{} lit points are behind a wall", through);
+    }
+
+    #[test]
+    fn a_fixed_light_still_lights_its_own_floor() {
+        // a range short enough to stay in the cell is no use if it stops short
+        // of the floor it is standing on
+        let maze = maze();
+
+        for (light, cell) in fixed(&maze).into_iter().zip(fixed_cells(&maze)) {
+            let floor = cell_centre(cell);
+
+            assert!(
+                (light.position - floor).length() < light.range,
+                "its own floor is {} away and it reaches {}",
+                (light.position - floor).length(),
+                light.range
+            );
         }
     }
 
