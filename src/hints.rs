@@ -45,9 +45,9 @@ impl Hint {
     pub fn name(self) -> &'static str {
         match self {
             Hint::Off => "off",
-            Hint::Whisper => "a whisper",
-            Hint::Trail => "a trail",
-            Hint::Whole => "the whole way",
+            Hint::Whisper => "a hint",
+            Hint::Trail => "hintier",
+            Hint::Whole => "hintiest",
         }
     }
 
