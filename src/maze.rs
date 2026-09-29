@@ -199,16 +199,6 @@ impl Maze {
             .map(|(_, cell)| cell)
             .expect("the start is always reachable from itself")
     }
-
-    /// How many walls were knocked down. A maze with one route between any two
-    /// cells has exactly one fewer than it has cells.
-    pub fn openings(&self) -> usize {
-        self.open
-            .iter()
-            .map(|sides| sides.count_ones() as usize)
-            .sum::<usize>()
-            / 2
-    }
 }
 
 #[cfg(test)]
@@ -219,6 +209,16 @@ mod tests {
 
     fn maze(seed: u64) -> Maze {
         Maze::carve(&mut StdRng::seed_from_u64(seed))
+    }
+
+    /// How many walls were knocked down. A maze with one route between any two
+    /// cells has exactly one fewer than it has cells; more means a loop.
+    fn openings(maze: &Maze) -> usize {
+        maze.open
+            .iter()
+            .map(|sides| sides.count_ones() as usize)
+            .sum::<usize>()
+            / 2
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod tests {
             let maze = maze(seed);
 
             assert!(
-                maze.openings() > CELLS - 1,
+                openings(&maze) > CELLS - 1,
                 "seed {} is still a perfect maze",
                 seed
             );

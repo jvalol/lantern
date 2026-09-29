@@ -9,3 +9,4 @@ not a priority, and it never changes once a spec exists.
 | Spec | Covers |
 | --- | --- |
 | [0001](0001-the-two-lamps.md) | Two lamps, a dark maze, and where to leave them (draft) |
+| [0002](0002-walking-it.md) | Walls you can walk into, and the lamps as light (draft) |
