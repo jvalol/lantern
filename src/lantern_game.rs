@@ -237,8 +237,7 @@ impl Game for LanternGame {
 
         // a candle, not a ball: the flame sits above the wax, so the wax is lit
         // by it rather than being the one unlit thing in the maze
-        let hand = self.player.eye() + self.player.forward() * lights::HELD_OUT
-            - Vec3::Y * lights::HELD_DOWN;
+        let hand = lights::hand_at(self.player.eye(), self.player.forward(), &self.walls);
 
         if let (Some(wax), Some(flame)) = (self.wax, self.flame) {
             let standing = self

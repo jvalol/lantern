@@ -27,6 +27,11 @@ spec 0013.
 Turning by key is a rate rather than a distance, because a key is down or it is
 not, so how far you turn is how long you hold it.
 
+**A carried candle is stopped by walls like anything else.** Held straight out
+it reaches far enough to stand inside a wall you are facing closely, which puts
+the light on the far side of it. It is swept from the eye instead and stops at
+the first wall, so in a corner you hold it against your chest.
+
 **Space does both.** Standing where a candle is, it takes that one up;
 otherwise it puts one down. Two keys for putting down and taking up meant
 remembering which, for an action that is always one or the other depending on
@@ -56,6 +61,8 @@ that decides whether the game is a decision or a walk.
 - Walking into a corner slides along it. — `player::tests::a_corner_turns_you`
 - Walking is relative to where you look. — `player::tests::forward_is_where_you_are_looking`
 - Turning changes where forward is, and does not move you. — `player::tests::turning_changes_where_forward_is`
+- A wall stops a carried candle reaching through it. — `lights::tests::a_wall_stops_the_candle_reaching_through_it`
+- With nothing in the way it is held at arm's length. — `lights::tests::nothing_in_the_way_holds_it_at_arms_length`
 - Space puts one down, and takes it back. — `lantern_game::tests::space_puts_one_down_and_takes_it_back`
 - Space takes up before it puts down. — `lantern_game::tests::space_takes_up_before_it_puts_down`
 - A lamp put down lights the cell it stands in. — `lights::tests::a_standing_lamp_lights_its_cell`

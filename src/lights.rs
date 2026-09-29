@@ -1,6 +1,7 @@
 //! The lamps as light, and the dim ones fixed in the maze. See
 //! `specs/0002-walking-it.md`.
 
+use blitzkit::collision::{sweep_sphere, Aabb, Sphere};
 use blitzkit::lighting::{PointLight, MAX_POINT_LIGHTS};
 use glam::{vec3, Vec3};
 
@@ -52,6 +53,28 @@ pub fn fixed(maze: &Maze) -> Vec<PointLight> {
 pub const HELD_OUT: f32 = 1.15;
 pub const HELD_DOWN: f32 = 0.62;
 const HELD_ASIDE: f32 = 0.42;
+
+/// How far out a candle is held, once the walls have had their say.
+///
+/// Held straight out, a candle reaches far enough to stand inside a wall when
+/// you face one closely, which put the light on the wrong side of it. Sweeping
+/// from the eye to where the hand would be and stopping at the first wall keeps
+/// it this side, and pulls it in against your chest in a corner.
+pub fn hand_at(eye: Vec3, forward: Vec3, walls: &[Aabb]) -> Vec3 {
+    let reach = forward * HELD_OUT - Vec3::Y * HELD_DOWN;
+    let body = Sphere::new(eye, FLAME_CLEARANCE);
+
+    let nearest = walls
+        .iter()
+        .filter_map(|wall| sweep_sphere(&body, reach, wall))
+        .map(|hit| hit.distance)
+        .fold(f32::INFINITY, f32::min);
+
+    eye + reach * nearest.clamp(0.0, 1.0)
+}
+
+/// How much room a flame wants from a wall, so it does not sit inside one.
+const FLAME_CLEARANCE: f32 = 0.22;
 
 /// Where the lamps in hand are: held out in front, and one to each side when
 /// both are, so two in hand are not one light of twice the strength.
@@ -108,6 +131,30 @@ mod tests {
 
     fn maze() -> Maze {
         Maze::carve(&mut StdRng::seed_from_u64(3))
+    }
+
+    #[test]
+    fn a_wall_stops_the_candle_reaching_through_it() {
+        // held straight out, a candle stands inside a wall you face closely,
+        // which puts the light on the far side of it
+        let eye = Vec3::new(0.0, 1.5, 0.0);
+        let wall = Aabb::from_center_size(Vec3::new(0.0, 1.0, -0.6), Vec3::new(4.0, 3.0, 0.3));
+
+        let clear = hand_at(eye, -Vec3::Z, &[]);
+        let against = hand_at(eye, -Vec3::Z, &[wall]);
+
+        assert!(against.z > clear.z, "the wall did not stop it");
+        assert!(against.z > -0.6, "it is through the wall at {}", against.z);
+    }
+
+    #[test]
+    fn nothing_in_the_way_holds_it_at_arms_length() {
+        let eye = Vec3::new(0.0, 1.5, 0.0);
+
+        let hand = hand_at(eye, -Vec3::Z, &[]);
+
+        assert!((hand.z - -HELD_OUT).abs() < 1e-5, "held at {}", hand.z);
+        assert!((hand.y - (1.5 - HELD_DOWN)).abs() < 1e-5);
     }
 
     #[test]
