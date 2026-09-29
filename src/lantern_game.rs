@@ -85,6 +85,8 @@ pub struct LanternGame {
     mark: Option<MeshId>,
     threshold: Option<MeshId>,
     tile: Option<MeshId>,
+    face: Option<MeshId>,
+    faces: Vec<(Vec3, Vec3)>,
     field: Vec<(Vec3, f32)>,
     /// Whether you have stepped through the door. Once, and it stays.
     out: bool,
@@ -114,6 +116,7 @@ impl LanternGame {
         // the same way a wall does
         let route = Route::of(&maze);
         let field = crate::field::tiles(&maze);
+        let faces = crate::field::outer_faces(&maze);
         let mut walls = walls::colliders(&maze);
         walls.extend(
             lights::fixed_cells(&maze)
@@ -135,6 +138,8 @@ impl LanternGame {
             mark: None,
             threshold: None,
             tile: None,
+            face: None,
+            faces,
             field,
             out: false,
             height: 0.0,
@@ -209,6 +214,23 @@ impl LanternGame {
         )
     }
 
+    /// How far there is left to go, and what you are carrying.
+    ///
+    /// Out on the grass this is not shown at all. The nearest cell to somewhere
+    /// outside the maze is still a cell, so it went on counting at someone who
+    /// had already left.
+    fn update_readout(&mut self) {
+        let steps = self.maze.distances_from(self.cell())[self.maze.exit].unwrap_or(0);
+
+        self.readout.text = format!(
+            "{} in hand, {} down   {} {} from the way out",
+            self.lamps.carried(),
+            self.lamps.standing().len(),
+            steps,
+            if steps == 1 { "cell" } else { "cells" }
+        );
+    }
+
     fn cell(&self) -> usize {
         (0..maze::CELLS)
             .min_by(|a, b| {
@@ -256,6 +278,7 @@ impl Game for LanternGame {
         self.mark = Some(renderer.add_mesh(&crate::hints::mark()));
         self.threshold = Some(renderer.add_mesh(&crate::way_out::threshold()));
         self.tile = Some(renderer.add_mesh(&crate::field::tile()));
+        self.face = Some(renderer.add_mesh(&blitzkit::mesh::MeshData::cube()));
 
         let reach = maze::WIDTH as f32 * walls::CELL;
         renderer.set_scene_bounds(Aabb::new(
@@ -312,17 +335,7 @@ impl Game for LanternGame {
             sound_system.queue(crate::chime::chime());
         }
 
-        let steps = self.maze.distances_from(self.cell())[self.maze.exit];
-        self.readout.text = if self.cell() == self.maze.exit {
-            String::from("out")
-        } else {
-            format!(
-                "{} in hand, {} down   {} cells from the way out",
-                self.lamps.carried(),
-                self.lamps.standing().len(),
-                steps.unwrap_or(0)
-            )
-        };
+        self.update_readout();
 
         // two lines at heights of our own, because a wrapped line's leading is
         // the font's and it is too tight to read
@@ -333,7 +346,9 @@ impl Game for LanternGame {
         self.readout.bounds = wide;
         self.controls.bounds = wide;
 
-        text_renderer.render_texts.push(self.readout.clone());
+        if !self.out {
+            text_renderer.render_texts.push(self.readout.clone());
+        }
         self.hint_line.bounds = wide;
         self.hint_line.text = format!("Hint: {}. Press h to make it hintier.", self.hint.name());
         text_renderer.render_texts.push(self.controls.clone());
@@ -369,6 +384,18 @@ impl Game for LanternGame {
 
         // the grass outside, drawn whether you are out on it or not. Seeing it
         // through the doorway is most of what makes the door worth walking to.
+        // the labyrinth from outside. Its braziers are shut inside it and your
+        // candles are out by the time you can look back at it, so without a
+        // face on it the thing you just walked out of is not there.
+        if let Some(face) = self.face {
+            let lit = crate::field::STONE_TINT * (crate::field::STONE_GLOW / AMBIENT);
+            let look = vec4(lit.x, lit.y, lit.z, 1.0);
+
+            for (at, size) in &self.faces {
+                scene.push_colored(face, &Transform::at(*at).with_scale(*size), look);
+            }
+        }
+
         if let Some(tile) = self.tile {
             for (at, glow) in &self.field {
                 let lit = crate::field::TINT * (glow / AMBIENT);
@@ -619,6 +646,24 @@ mod tests {
         game.ending.position = vec2(game.width * 0.5, game.height * 0.5);
 
         assert_eq!(game.ending.position, vec2(400.0, 300.0));
+    }
+
+    #[test]
+    fn one_cell_is_a_cell() {
+        let mut game = LanternGame::new();
+        let steps = game.maze.distances_from(game.maze.exit);
+        let one_away = (0..maze::CELLS)
+            .find(|cell| steps[*cell] == Some(1))
+            .expect("something adjoins the way out");
+
+        game.player = crate::player::Player::at(cell_centre(one_away));
+        game.update_readout();
+
+        assert!(
+            game.readout.text.contains("1 cell from"),
+            "{}",
+            game.readout.text
+        );
     }
 
     #[test]
