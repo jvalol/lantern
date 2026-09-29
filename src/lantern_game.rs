@@ -29,6 +29,9 @@ const WAX_LOOK: glam::Vec4 = vec4(0.92, 0.88, 0.76, 1.0);
 /// ambient is what makes it look lit from inside.
 const FLAME_LOOK: glam::Vec4 = vec4(34.0, 26.0, 12.0, 1.0);
 
+/// The hand holding a candle, warm and close to the flame lighting it.
+const HAND_LOOK: glam::Vec4 = vec4(0.78, 0.56, 0.42, 1.0);
+
 /// Which way to look at the start: down a way out of the first cell, rather
 /// than at whichever wall happens to be ahead.
 fn facing_a_way_out(maze: &Maze) -> f32 {
@@ -55,6 +58,7 @@ pub struct LanternGame {
     /// it and the thing making it is lit.
     wax: Option<MeshId>,
     flame: Option<MeshId>,
+    hand: Option<MeshId>,
     player: Player,
     lamps: Lamps,
 
@@ -82,6 +86,7 @@ impl LanternGame {
             mesh: None,
             wax: None,
             flame: None,
+            hand: None,
             player,
             lamps: Lamps::new(),
             held: [false; 6],
@@ -100,7 +105,7 @@ impl LanternGame {
                 color: vec4(1.0, 1.0, 1.0, 0.55),
                 size: 20.0,
                 text: String::from(
-                    "arrows turn, wasd walks, space puts a candle down or picks it up",
+                    "Press the left and right arrow keys to rotate, wasd keys or the mouse to move, and press space to place or pick up a candle",
                 ),
                 ..Default::default()
             },
@@ -149,6 +154,7 @@ impl Game for LanternGame {
         self.mesh = Some(renderer.add_mesh(&walls::mesh(&self.maze)));
         self.wax = Some(renderer.add_mesh(&crate::candle::wax()));
         self.flame = Some(renderer.add_mesh(&crate::candle::flame()));
+        self.hand = Some(renderer.add_mesh(&crate::candle::hand()));
 
         let reach = maze::WIDTH as f32 * walls::CELL;
         renderer.set_scene_bounds(Aabb::new(
@@ -237,28 +243,45 @@ impl Game for LanternGame {
 
         // a candle, not a ball: the flame sits above the wax, so the wax is lit
         // by it rather than being the one unlit thing in the maze
-        let hand = lights::hand_at(self.player.eye(), self.player.forward(), &self.walls);
+        let carried = lights::carried_at(
+            &self.lamps,
+            self.player.eye(),
+            self.player.forward(),
+            self.player.right(),
+            &self.walls,
+        );
 
-        if let (Some(wax), Some(flame)) = (self.wax, self.flame) {
+        if let (Some(wax), Some(flame), Some(hand)) = (self.wax, self.flame, self.hand) {
             let standing = self
                 .lamps
                 .standing()
                 .into_iter()
-                .map(|cell| cell_centre(cell) + Vec3::Y * lights::STANDS);
-            let carried = lights::carried_at(&self.lamps, hand, self.player.right());
+                .map(|cell| (cell_centre(cell) + Vec3::Y * lights::STANDS, false));
+            let held = carried.iter().map(|at| (*at, true));
 
-            for foot in standing.chain(carried) {
-                let foot = foot - Vec3::Y * crate::candle::FLAME_HEIGHT;
+            for (flame_at, in_hand) in standing.chain(held) {
+                let foot = flame_at - Vec3::Y * crate::candle::FLAME_HEIGHT;
+
                 scene.push_colored(wax, &Transform::at(foot), WAX_LOOK);
-                scene.push_colored(
-                    flame,
-                    &Transform::at(foot + Vec3::Y * crate::candle::FLAME_HEIGHT),
-                    FLAME_LOOK,
-                );
+                scene.push_colored(flame, &Transform::at(flame_at), FLAME_LOOK);
+
+                // one you are holding has a hand round it, so the light in
+                // front of you is yours rather than something floating there
+                if in_hand {
+                    let grip = foot + Vec3::Y * crate::candle::HAND_GRIP;
+                    scene.push_colored(hand, &Transform::at(grip), HAND_LOOK);
+                }
             }
         }
 
-        for light in lights::all(&self.maze, &self.lamps, hand, self.player.right()) {
+        for light in lights::all(
+            &self.maze,
+            &self.lamps,
+            self.player.eye(),
+            self.player.forward(),
+            self.player.right(),
+            &self.walls,
+        ) {
             scene.push_light(light);
         }
 

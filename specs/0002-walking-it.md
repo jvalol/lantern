@@ -32,6 +32,20 @@ it reaches far enough to stand inside a wall you are facing closely, which puts
 the light on the far side of it. It is swept from the eye instead and stops at
 the first wall, so in a corner you hold it against your chest.
 
+Each candle is swept on its own. Sweeping the hand and then stepping the candles
+out to either side of it does the test before the last move, so a candle clear
+at the hand still ends up through a wall.
+
+The sweep reports how far it got in world units, not what fraction of the reach
+that was. The reach is longer than one unit, so reading it as a fraction places
+a candle the whole way out from a wall it just hit, which is the only way one
+ever got through.
+
+**A candle is a solid you can see someone holding.** An open tube is
+see-through and reads as a shell rather than wax, and a light with nothing
+around it reads as a floating orb. A hand closes round the wax of the one you
+carry.
+
 **Space does both.** Standing where a candle is, it takes that one up;
 otherwise it puts one down. Two keys for putting down and taking up meant
 remembering which, for an action that is always one or the other depending on
@@ -63,6 +77,12 @@ that decides whether the game is a decision or a walk.
 - Turning changes where forward is, and does not move you. — `player::tests::turning_changes_where_forward_is`
 - A wall stops a carried candle reaching through it. — `lights::tests::a_wall_stops_the_candle_reaching_through_it`
 - With nothing in the way it is held at arm's length. — `lights::tests::nothing_in_the_way_holds_it_at_arms_length`
+- Each candle is swept, not just the hand. — `lights::tests::every_candle_is_swept_not_just_the_hand`
+- How far the sweep got is not what fraction of the reach that was. — `lights::tests::how_far_it_got_is_not_how_much_of_the_reach_that_was`
+- Nowhere in the maze, facing any way, does a candle end up inside a wall. — `lights::tests::no_candle_ends_up_inside_a_wall_anywhere_in_the_maze`
+- The wax is a closed solid rather than a tube. — `candle::tests::the_wax_is_closed`
+- The flame stands clear of the wax along its whole body. — `candle::tests::the_flame_sits_above_the_wax`
+- A hand closes round the wax. — `candle::tests::the_hand_is_wide_enough_to_hold_the_wax`
 - Space puts one down, and takes it back. — `lantern_game::tests::space_puts_one_down_and_takes_it_back`
 - Space takes up before it puts down. — `lantern_game::tests::space_takes_up_before_it_puts_down`
 - A lamp put down lights the cell it stands in. — `lights::tests::a_standing_lamp_lights_its_cell`
