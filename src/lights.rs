@@ -20,8 +20,9 @@ pub const FIXED_RANGE: f32 = 7.0;
 pub const FIXED_COLOR: Vec3 = vec3(0.42, 0.48, 0.70);
 pub const FIXED_INTENSITY: f32 = 0.22;
 
-/// How high a lamp sits off the floor.
-const HEIGHT: f32 = 0.7;
+/// How high a lamp sits off the floor, and how big the thing itself is.
+pub const STANDS: f32 = 0.7;
+const HEIGHT: f32 = STANDS;
 
 /// Where the fixed lights are: spread through the maze by index, so they do not
 /// move between runs of the same maze.
@@ -48,9 +49,29 @@ pub fn fixed(maze: &Maze) -> Vec<PointLight> {
 
 /// How far out in front a carried lamp is held, and how far to each side when
 /// both are. At the eye it would be a light the camera is standing inside.
-pub const HELD_OUT: f32 = 0.5;
-pub const HELD_DOWN: f32 = 0.5;
-const HELD_ASIDE: f32 = 0.35;
+pub const HELD_OUT: f32 = 1.15;
+pub const HELD_DOWN: f32 = 0.62;
+const HELD_ASIDE: f32 = 0.42;
+
+/// Where the lamps in hand are: held out in front, and one to each side when
+/// both are, so two in hand are not one light of twice the strength.
+///
+/// The drawing wants these as well as the lighting, and a lamp drawn somewhere
+/// its light is not would be worse than not drawing it at all.
+pub fn carried_at(lamps: &Lamps, hand: Vec3, aside: Vec3) -> Vec<Vec3> {
+    let carried = lamps.carried();
+
+    (0..carried)
+        .map(|n| {
+            let across = if carried > 1 {
+                aside * if n == 0 { -HELD_ASIDE } else { HELD_ASIDE }
+            } else {
+                Vec3::ZERO
+            };
+            hand + across
+        })
+        .collect()
+}
 
 /// Every light the scene should carry: the fixed ones, then the two lamps.
 ///
@@ -71,18 +92,8 @@ pub fn all(maze: &Maze, lamps: &Lamps, hand: Vec3, aside: Vec3) -> Vec<PointLigh
         );
     }
 
-    // held out in front, and one to each side when both are, so two lamps in
-    // hand are not one light of twice the strength
-    let carried = lamps.carried();
-    for n in 0..carried {
-        let across = if carried > 1 {
-            aside * if n == 0 { -HELD_ASIDE } else { HELD_ASIDE }
-        } else {
-            Vec3::ZERO
-        };
-
-        lights
-            .push(PointLight::new(hand + across, LAMP_COLOR, LAMP_INTENSITY, LAMP_RANGE).casting());
+    for at in carried_at(lamps, hand, aside) {
+        lights.push(PointLight::new(at, LAMP_COLOR, LAMP_INTENSITY, LAMP_RANGE).casting());
     }
 
     lights

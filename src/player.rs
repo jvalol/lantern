@@ -14,6 +14,11 @@ pub const EYE: f32 = 1.5;
 pub const SPEED: f32 = 4.2;
 pub const LOOK: f32 = 0.0022;
 
+/// How fast the arrows turn you, in radians a second. Slower than the mouse
+/// on purpose: a key is either down or it is not, so the only thing deciding
+/// how far you turn is how long you hold it.
+pub const TURN: f32 = 2.2;
+
 /// How far up and down you can look, short of straight up, where a camera's up
 /// vector has nothing to be square to.
 const PITCH_LIMIT: f32 = 1.45;
@@ -54,6 +59,11 @@ impl Player {
 
     pub fn eye(&self) -> Vec3 {
         self.position + Vec3::Y * EYE
+    }
+
+    /// Turns you, which is what the arrows do. The mouse looks; the arrows turn.
+    pub fn turn(&mut self, amount: f32) {
+        self.yaw += amount;
     }
 
     pub fn look(&mut self, delta: glam::Vec2) {
@@ -114,6 +124,20 @@ mod tests {
             "slid only {} along the wall",
             player.position.z - before
         );
+    }
+
+    #[test]
+    fn turning_changes_where_forward_is() {
+        let mut player = Player::at(Vec3::ZERO);
+        let before = player.forward();
+
+        player.turn(TURN * 0.5);
+
+        assert!(
+            (player.forward() - before).length() > 0.3,
+            "turning did not move where forward is"
+        );
+        assert_eq!(player.position, Vec3::ZERO, "and it did not move you");
     }
 
     #[test]

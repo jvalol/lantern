@@ -18,8 +18,19 @@ none of it moves.
 against the walls as boxes. A corner you walk into turns you along it rather
 than stopping you, which is what stops a dark maze being infuriating.
 
-**Look with the mouse, walk with the keys**, and the cursor is locked, per spec
-0013. Walking is relative to where you are looking.
+**The mouse looks and the arrows turn.** They are not the same thing and binding
+the arrows to strafe made the game unplayable with one hand: you could not get
+round a corner without reaching for the mouse. Left and right turn you, up and
+down walk you, A and D strafe, and the mouse looks. The cursor is locked, per
+spec 0013.
+
+Turning by key is a rate rather than a distance, because a key is down or it is
+not, so how far you turn is how long you hold it.
+
+**Space does both.** Standing where a candle is, it takes that one up;
+otherwise it puts one down. Two keys for putting down and taking up meant
+remembering which, for an action that is always one or the other depending on
+where you are standing.
 
 **The two lamps are `PointLight`s that cast.** `casts: true`, which spec 0022
 turns into six shadow passes each. A lamp standing in the maze lights the
@@ -44,6 +55,9 @@ that decides whether the game is a decision or a walk.
 - Walking into a wall does not pass through it. — `player::tests::a_wall_stops_you`
 - Walking into a corner slides along it. — `player::tests::a_corner_turns_you`
 - Walking is relative to where you look. — `player::tests::forward_is_where_you_are_looking`
+- Turning changes where forward is, and does not move you. — `player::tests::turning_changes_where_forward_is`
+- Space puts one down, and takes it back. — `lantern_game::tests::space_puts_one_down_and_takes_it_back`
+- Space takes up before it puts down. — `lantern_game::tests::space_takes_up_before_it_puts_down`
 - A lamp put down lights the cell it stands in. — `lights::tests::a_standing_lamp_lights_its_cell`
 - A carried lamp lights where you are. — `lights::tests::a_carried_lamp_follows_you`
 - Both lamps cast, and nothing else does. — `lights::tests::only_the_two_cast`

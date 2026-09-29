@@ -21,6 +21,13 @@ use crate::player::Player;
 use crate::walls::{self, cell_centre};
 
 const WALL_COLOR: glam::Vec4 = vec4(0.62, 0.58, 0.52, 1.0);
+/// Wax, lit by its own flame from above like anything else.
+const WAX_LOOK: glam::Vec4 = vec4(0.92, 0.88, 0.76, 1.0);
+
+/// The flame. The engine has no per-object emissive, but colour multiplies the
+/// ambient term as well as the diffuse one, so a large colour against a dim
+/// ambient is what makes it look lit from inside.
+const FLAME_LOOK: glam::Vec4 = vec4(34.0, 26.0, 12.0, 1.0);
 
 /// Which way to look at the start: down a way out of the first cell, rather
 /// than at whichever wall happens to be ahead.
@@ -44,14 +51,22 @@ pub struct LanternGame {
     maze: Maze,
     walls: Vec<Aabb>,
     mesh: Option<MeshId>,
+    /// The candle: wax and flame, so a light on the wall has something making
+    /// it and the thing making it is lit.
+    wax: Option<MeshId>,
+    flame: Option<MeshId>,
     player: Player,
     lamps: Lamps,
 
-    held: [bool; 4],
+    /// Forward, back, strafe left, strafe right, turn left, turn right.
+    held: [bool; 6],
+    /// What the readout wraps at, which is the window less a margin.
+    width: f32,
     locked: bool,
     wants_lock: bool,
     quitting: bool,
     readout: RenderText,
+    controls: RenderText,
 }
 
 impl LanternGame {
@@ -65,16 +80,28 @@ impl LanternGame {
             maze,
             walls,
             mesh: None,
+            wax: None,
+            flame: None,
             player,
             lamps: Lamps::new(),
-            held: [false; 4],
+            held: [false; 6],
+            width: 800.0,
             locked: false,
             wants_lock: true,
             quitting: false,
             readout: RenderText {
                 position: vec2(20.0, 20.0),
-                color: vec4(1.0, 1.0, 1.0, 0.85),
+                color: vec4(1.0, 1.0, 1.0, 0.9),
                 size: 20.0,
+                ..Default::default()
+            },
+            controls: RenderText {
+                position: vec2(20.0, 52.0),
+                color: vec4(1.0, 1.0, 1.0, 0.55),
+                size: 20.0,
+                text: String::from(
+                    "arrows turn, wasd walks, space puts a candle down or picks it up",
+                ),
                 ..Default::default()
             },
         }
@@ -91,7 +118,7 @@ impl LanternGame {
     }
 
     fn wish(&self) -> Vec3 {
-        let [ahead, back, left, right] = self.held;
+        let [ahead, back, left, right, _, _] = self.held;
         let mut wish = Vec3::ZERO;
 
         if ahead {
@@ -120,6 +147,8 @@ impl Default for LanternGame {
 impl Game for LanternGame {
     fn load(&mut self, renderer: &mut Renderer) {
         self.mesh = Some(renderer.add_mesh(&walls::mesh(&self.maze)));
+        self.wax = Some(renderer.add_mesh(&crate::candle::wax()));
+        self.flame = Some(renderer.add_mesh(&crate::candle::flame()));
 
         let reach = maze::WIDTH as f32 * walls::CELL;
         renderer.set_scene_bounds(Aabb::new(
@@ -139,8 +168,13 @@ impl Game for LanternGame {
         _geometry: &mut Geometry,
         _text_renderer: &mut TextRenderer,
         _sound_system: &SoundSystem,
-        _window_size: (f32, f32),
+        window_size: (f32, f32),
     ) {
+        self.resized(window_size);
+    }
+
+    fn resized(&mut self, window_size: (f32, f32)) {
+        self.width = window_size.0;
     }
 
     fn update(
@@ -153,6 +187,15 @@ impl Game for LanternGame {
         geometry.reset();
         text_renderer.reset();
 
+        // the arrows turn you and the mouse looks. Strafing is A and D.
+        let [_, _, _, _, turn_left, turn_right] = self.held;
+        if turn_left {
+            self.player.turn(-crate::player::TURN * dt);
+        }
+        if turn_right {
+            self.player.turn(crate::player::TURN * dt);
+        }
+
         self.player.walk(self.wish(), dt, &self.walls);
 
         let steps = self.maze.distances_from(self.cell())[self.maze.exit];
@@ -160,13 +203,24 @@ impl Game for LanternGame {
             String::from("out")
         } else {
             format!(
-                "{} in hand, {} down   {} cells from the way out   space to put down, e to take up",
+                "{} in hand, {} down   {} cells from the way out",
                 self.lamps.carried(),
                 self.lamps.standing().len(),
                 steps.unwrap_or(0)
             )
         };
+
+        // two lines at heights of our own, because a wrapped line's leading is
+        // the font's and it is too tight to read
+        let wide = vec2(
+            self.width - 40.0,
+            blitzkit::renderer::render_text::UNBOUNDED_F32,
+        );
+        self.readout.bounds = wide;
+        self.controls.bounds = wide;
+
         text_renderer.render_texts.push(self.readout.clone());
+        text_renderer.render_texts.push(self.controls.clone());
     }
 
     fn draw(&mut self, scene: &mut Scene, camera: &mut Camera) {
@@ -181,9 +235,30 @@ impl Game for LanternGame {
 
         scene.push_colored(mesh, &Transform::default(), WALL_COLOR);
 
-        // held out in front and below the eye, not at it
+        // a candle, not a ball: the flame sits above the wax, so the wax is lit
+        // by it rather than being the one unlit thing in the maze
         let hand = self.player.eye() + self.player.forward() * lights::HELD_OUT
             - Vec3::Y * lights::HELD_DOWN;
+
+        if let (Some(wax), Some(flame)) = (self.wax, self.flame) {
+            let standing = self
+                .lamps
+                .standing()
+                .into_iter()
+                .map(|cell| cell_centre(cell) + Vec3::Y * lights::STANDS);
+            let carried = lights::carried_at(&self.lamps, hand, self.player.right());
+
+            for foot in standing.chain(carried) {
+                let foot = foot - Vec3::Y * crate::candle::FLAME_HEIGHT;
+                scene.push_colored(wax, &Transform::at(foot), WAX_LOOK);
+                scene.push_colored(
+                    flame,
+                    &Transform::at(foot + Vec3::Y * crate::candle::FLAME_HEIGHT),
+                    FLAME_LOOK,
+                );
+            }
+        }
+
         for light in lights::all(&self.maze, &self.lamps, hand, self.player.right()) {
             scene.push_light(light);
         }
@@ -199,8 +274,10 @@ impl Game for LanternGame {
         match input.key {
             KeyboardKey::W | KeyboardKey::Up => self.held[0] = down,
             KeyboardKey::S | KeyboardKey::Down => self.held[1] = down,
-            KeyboardKey::A | KeyboardKey::Left => self.held[2] = down,
-            KeyboardKey::D | KeyboardKey::Right => self.held[3] = down,
+            KeyboardKey::A => self.held[2] = down,
+            KeyboardKey::D => self.held[3] = down,
+            KeyboardKey::Left => self.held[4] = down,
+            KeyboardKey::Right => self.held[5] = down,
             _ => {}
         }
 
@@ -217,11 +294,12 @@ impl Game for LanternGame {
                     self.quitting = true;
                 }
             }
+            // one key: take up the one you are standing at, or put one down
             KeyboardKey::Space => {
-                self.lamps.put_down(self.cell());
-            }
-            KeyboardKey::E => {
-                self.lamps.take_up(self.cell());
+                let here = self.cell();
+                if !self.lamps.take_up(here) {
+                    self.lamps.put_down(here);
+                }
             }
             _ => {}
         }
@@ -246,7 +324,7 @@ impl Game for LanternGame {
     fn focus_changed(&mut self, focus: bool) {
         if !focus {
             self.wants_lock = false;
-            self.held = [false; 4];
+            self.held = [false; 6];
         }
     }
 }
@@ -291,13 +369,31 @@ mod tests {
     }
 
     #[test]
-    fn a_lamp_is_put_down_where_you_stand() {
+    fn space_puts_one_down_and_takes_it_back() {
         let mut game = LanternGame::new();
         let here = game.cell();
+        let press = |key| KeyboardInput::new(key, KeyboardKeyState::Pressed, false);
 
+        game.process_keyboard(press(KeyboardKey::Space));
+        assert_eq!(game.lamps.standing(), vec![here], "it went down");
+
+        game.process_keyboard(press(KeyboardKey::Space));
+        assert!(game.lamps.standing().is_empty(), "and came back up");
+        assert_eq!(game.lamps.carried(), crate::lamps::LAMPS);
+    }
+
+    #[test]
+    fn space_takes_up_before_it_puts_down() {
+        // standing at a candle with one still in hand, you want the one at your
+        // feet rather than a second one beside it
+        let mut game = LanternGame::new();
+        let here = game.cell();
         game.lamps.put_down(here);
+        let press = |key| KeyboardInput::new(key, KeyboardKeyState::Pressed, false);
 
-        assert_eq!(game.lamps.standing(), vec![here]);
+        game.process_keyboard(press(KeyboardKey::Space));
+
+        assert!(game.lamps.standing().is_empty());
     }
 
     #[test]
@@ -318,10 +414,10 @@ mod tests {
     #[test]
     fn losing_focus_stops_you_walking() {
         let mut game = LanternGame::new();
-        game.held = [true; 4];
+        game.held = [true; 6];
 
         game.focus_changed(false);
 
-        assert_eq!(game.held, [false; 4], "a held key does not stay held");
+        assert_eq!(game.held, [false; 6], "a held key does not stay held");
     }
 }
