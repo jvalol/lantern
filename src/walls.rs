@@ -169,6 +169,23 @@ mod tests {
     }
 
     #[test]
+    fn the_doorway_has_no_wall() {
+        // the way out is a hole in the outer wall, so nothing is built there
+        for seed in 0..20 {
+            let maze = maze(seed);
+            let door = wall_box(maze.exit, maze.way_out());
+
+            assert!(
+                !colliders(&maze)
+                    .iter()
+                    .any(|wall| (wall.center() - door.center()).length() < 1e-4),
+                "seed {}: the doorway is walled up",
+                seed
+            );
+        }
+    }
+
+    #[test]
     fn the_maze_is_centred() {
         let first = cell_centre(0);
         let last = cell_centre(maze::CELLS - 1);

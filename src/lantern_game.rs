@@ -14,6 +14,7 @@ use glam::{vec2, vec3, vec4, Vec2, Vec3};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+use crate::hints::{Hint, Route};
 use crate::lamps::Lamps;
 use crate::lights;
 use crate::maze::{self, Maze};
@@ -28,6 +29,10 @@ const WAX_LOOK: glam::Vec4 = vec4(0.92, 0.88, 0.76, 1.0);
 /// ambient term as well as the diffuse one, so a large colour against a dim
 /// ambient is what makes it look lit from inside.
 const FLAME_LOOK: glam::Vec4 = vec4(170.0, 130.0, 60.0, 1.0);
+
+/// What a mark on the way out is tinted, before its setting brightens it. Pale
+/// and cool, so it is not mistaken for something burning.
+pub const MARK_TINT: Vec3 = vec3(0.72, 0.86, 0.95);
 
 /// How much light there is with nothing lighting it.
 ///
@@ -77,6 +82,17 @@ pub struct LanternGame {
     hand: Option<MeshId>,
     brazier: Option<MeshId>,
     brazier_flame: Option<MeshId>,
+    mark: Option<MeshId>,
+    threshold: Option<MeshId>,
+    tile: Option<MeshId>,
+    field: Vec<(Vec3, f32)>,
+    /// Whether you have stepped through the door. Once, and it stays.
+    out: bool,
+    height: f32,
+    ending: RenderText,
+    hint: Hint,
+    route: Route,
+    hint_line: RenderText,
     player: Player,
     lamps: Lamps,
 
@@ -96,6 +112,8 @@ impl LanternGame {
         let maze = Maze::carve(&mut StdRng::from_entropy());
         // the braziers stand in the maze, so they stop you and stop a candle
         // the same way a wall does
+        let route = Route::of(&maze);
+        let field = crate::field::tiles(&maze);
         let mut walls = walls::colliders(&maze);
         walls.extend(
             lights::fixed_cells(&maze)
@@ -114,6 +132,21 @@ impl LanternGame {
             hand: None,
             brazier: None,
             brazier_flame: None,
+            mark: None,
+            threshold: None,
+            tile: None,
+            field,
+            out: false,
+            height: 0.0,
+            ending: RenderText {
+                color: vec4(1.0, 1.0, 1.0, 0.95),
+                size: 32.0,
+                centered: true,
+                text: String::from("You made it!"),
+                ..Default::default()
+            },
+            hint: Hint::default(),
+            route,
             player,
             lamps: Lamps::new(),
             held: [false; 6],
@@ -124,6 +157,12 @@ impl LanternGame {
             readout: RenderText {
                 position: vec2(20.0, 20.0),
                 color: vec4(1.0, 1.0, 1.0, 0.9),
+                size: 20.0,
+                ..Default::default()
+            },
+            hint_line: RenderText {
+                position: vec2(20.0, 104.0),
+                color: vec4(1.0, 1.0, 1.0, 0.55),
                 size: 20.0,
                 ..Default::default()
             },
@@ -140,6 +179,36 @@ impl LanternGame {
     }
 
     /// Which cell you are standing in.
+    /// Whether you have walked out through the door.
+    ///
+    /// Crossing the line the wall stood on, rather than arriving in the cell.
+    /// Arriving happens a stride before the doorway and is over by the time you
+    /// walk through it, which is the wrong moment for the thing to end on.
+    fn beyond_the_door(&self) -> bool {
+        let (dx, dy) = self.maze.way_out().step();
+        let out = vec3(dx as f32, 0.0, dy as f32);
+        let line = crate::field::doorstep(&self.maze);
+
+        (self.player.position - line).dot(out) > 0.0
+    }
+
+    /// Every light the scene should carry. Out on the grass that is the
+    /// braziers and nothing else: the candles are done.
+    fn lit(&self) -> Vec<blitzkit::lighting::PointLight> {
+        if self.out {
+            return lights::fixed(&self.maze);
+        }
+
+        lights::all(
+            &self.maze,
+            &self.lamps,
+            self.player.eye(),
+            self.player.forward(),
+            self.player.right(),
+            &self.walls,
+        )
+    }
+
     fn cell(&self) -> usize {
         (0..maze::CELLS)
             .min_by(|a, b| {
@@ -184,6 +253,9 @@ impl Game for LanternGame {
         self.hand = Some(renderer.add_mesh(&crate::candle::hand()));
         self.brazier = Some(renderer.add_mesh(&crate::brazier::stand()));
         self.brazier_flame = Some(renderer.add_mesh(&crate::brazier::flame()));
+        self.mark = Some(renderer.add_mesh(&crate::hints::mark()));
+        self.threshold = Some(renderer.add_mesh(&crate::way_out::threshold()));
+        self.tile = Some(renderer.add_mesh(&crate::field::tile()));
 
         let reach = maze::WIDTH as f32 * walls::CELL;
         renderer.set_scene_bounds(Aabb::new(
@@ -210,6 +282,7 @@ impl Game for LanternGame {
 
     fn resized(&mut self, window_size: (f32, f32)) {
         self.width = window_size.0;
+        self.height = window_size.1;
     }
 
     fn update(
@@ -217,7 +290,7 @@ impl Game for LanternGame {
         dt: f32,
         geometry: &mut Geometry,
         text_renderer: &mut TextRenderer,
-        _sound_system: &SoundSystem,
+        sound_system: &SoundSystem,
     ) {
         geometry.reset();
         text_renderer.reset();
@@ -232,6 +305,12 @@ impl Game for LanternGame {
         }
 
         self.player.walk(self.wish(), dt, &self.walls);
+
+        // the moment of it, once. Walking further out does not do it again.
+        if !self.out && self.beyond_the_door() {
+            self.out = true;
+            sound_system.queue(crate::chime::chime());
+        }
 
         let steps = self.maze.distances_from(self.cell())[self.maze.exit];
         self.readout.text = if self.cell() == self.maze.exit {
@@ -255,7 +334,15 @@ impl Game for LanternGame {
         self.controls.bounds = wide;
 
         text_renderer.render_texts.push(self.readout.clone());
+        self.hint_line.bounds = wide;
+        self.hint_line.text = format!("Hint: {}. Press h to make it hintier.", self.hint.name());
         text_renderer.render_texts.push(self.controls.clone());
+        text_renderer.render_texts.push(self.hint_line.clone());
+
+        if self.out {
+            self.ending.position = vec2(self.width * 0.5, self.height * 0.5);
+            text_renderer.render_texts.push(self.ending.clone());
+        }
     }
 
     fn draw(&mut self, scene: &mut Scene, camera: &mut Camera) {
@@ -280,6 +367,45 @@ impl Game for LanternGame {
             &self.walls,
         );
 
+        // the grass outside, drawn whether you are out on it or not. Seeing it
+        // through the doorway is most of what makes the door worth walking to.
+        if let Some(tile) = self.tile {
+            for (at, glow) in &self.field {
+                let lit = crate::field::TINT * (glow / AMBIENT);
+                scene.push_colored(tile, &Transform::at(*at), vec4(lit.x, lit.y, lit.z, 1.0));
+            }
+        }
+
+        // light coming in at the door, which is what makes the way out visible
+        // from down a corridor rather than only once you are standing in it
+        if let Some(threshold) = self.threshold {
+            let glow = crate::way_out::GLOW / AMBIENT;
+            let tint = crate::way_out::TINT * glow;
+
+            scene.push_colored(
+                threshold,
+                &Transform::at(crate::way_out::threshold_at(&self.maze)),
+                vec4(tint.x, tint.y, tint.z, 1.0),
+            );
+        }
+
+        // the way out, as far along it as the setting shows. A mark is
+        // geometry, so a wall hides it: turning it up lights more of the route
+        // rather than handing you a map.
+        if let Some(mark) = self.mark {
+            let glow = self.hint.glow() / AMBIENT;
+            let look = vec4(
+                MARK_TINT.x * glow,
+                MARK_TINT.y * glow,
+                MARK_TINT.z * glow,
+                1.0,
+            );
+
+            for cell in self.route.shown(&self.maze, self.cell(), self.hint) {
+                scene.push_colored(mark, &Transform::at(crate::hints::mark_at(cell)), look);
+            }
+        }
+
         // the fixed lights, with something making each of them. A light with
         // nothing at it reads as a smear rather than a lamp.
         if let (Some(stand), Some(lit)) = (self.brazier, self.brazier_flame) {
@@ -294,10 +420,16 @@ impl Game for LanternGame {
             }
         }
 
+        // out on the grass the candles are done, which is the mechanic ending
+        // rather than the screen saying so
         if let (Some(wax), Some(flame), Some(hand)) = (self.wax, self.flame, self.hand) {
-            let standing = self
-                .lamps
-                .standing()
+            let carried: Vec<Vec3> = if self.out { Vec::new() } else { carried };
+            let standing_cells: Vec<usize> = if self.out {
+                Vec::new()
+            } else {
+                self.lamps.standing()
+            };
+            let standing = standing_cells
                 .into_iter()
                 .map(|cell| (cell_centre(cell) + Vec3::Y * lights::STANDS, false));
             let held = carried.iter().map(|at| (*at, true));
@@ -317,14 +449,7 @@ impl Game for LanternGame {
             }
         }
 
-        for light in lights::all(
-            &self.maze,
-            &self.lamps,
-            self.player.eye(),
-            self.player.forward(),
-            self.player.right(),
-            &self.walls,
-        ) {
+        for light in self.lit() {
             scene.push_light(light);
         }
 
@@ -360,6 +485,11 @@ impl Game for LanternGame {
                 }
             }
             // one key: take up the one you are standing at, or put one down
+            KeyboardKey::H => {
+                if down {
+                    self.hint = self.hint.next();
+                }
+            }
             KeyboardKey::Space => {
                 let here = self.cell();
                 if !self.lamps.take_up(here) {
@@ -397,6 +527,99 @@ impl Game for LanternGame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_hint_key_cycles_back_to_off() {
+        let mut game = LanternGame::new();
+        let press = |key| KeyboardInput::new(key, KeyboardKeyState::Pressed, false);
+
+        assert_eq!(game.hint, Hint::Off);
+
+        let mut seen = vec![game.hint];
+        for _ in 1..Hint::ALL.len() {
+            game.process_keyboard(press(KeyboardKey::H));
+            assert!(
+                !seen.contains(&game.hint),
+                "{:?} came round twice",
+                game.hint
+            );
+            seen.push(game.hint);
+        }
+
+        game.process_keyboard(press(KeyboardKey::H));
+        assert_eq!(game.hint, Hint::Off, "it never comes back to off");
+    }
+
+    #[test]
+    fn no_marks_once_you_are_out() {
+        // nothing left to point at, whatever the setting
+        let mut game = LanternGame::new();
+        game.player = crate::player::Player::at(cell_centre(game.maze.exit));
+
+        for hint in Hint::ALL {
+            game.hint = hint;
+
+            assert!(
+                game.route
+                    .shown(&game.maze, game.cell(), game.hint)
+                    .is_empty(),
+                "{:?} still marks something at the way out",
+                hint
+            );
+        }
+    }
+
+    #[test]
+    fn it_ends_when_you_walk_through_not_when_you_arrive() {
+        // arriving happens a stride before the doorway and is over by the time
+        // you walk through it, which is the wrong moment to end on
+        let mut game = LanternGame::new();
+        let (dx, dy) = game.maze.way_out().step();
+        let out = vec3(dx as f32, 0.0, dy as f32);
+
+        game.player = crate::player::Player::at(cell_centre(game.maze.exit));
+        assert!(
+            !game.beyond_the_door(),
+            "standing in the cell already counted as out"
+        );
+
+        game.player = crate::player::Player::at(cell_centre(game.maze.exit) + out * walls::CELL);
+        assert!(game.beyond_the_door(), "a step outside did not count");
+    }
+
+    #[test]
+    fn the_candles_go_out_when_you_do() {
+        let mut game = LanternGame::new();
+
+        assert!(
+            game.lit().iter().any(|light| light.casts),
+            "nothing was casting to begin with"
+        );
+
+        game.out = true;
+
+        assert!(
+            !game.lit().iter().any(|light| light.casts),
+            "a candle is still burning out on the grass"
+        );
+        assert!(
+            !game.lit().is_empty(),
+            "the braziers went out too, and they are not yours to put out"
+        );
+    }
+
+    #[test]
+    fn the_ending_is_centred_in_the_window() {
+        let mut game = LanternGame::new();
+        game.resized((800.0, 600.0));
+
+        assert!(game.ending.centered);
+
+        game.out = true;
+        game.ending.position = vec2(game.width * 0.5, game.height * 0.5);
+
+        assert_eq!(game.ending.position, vec2(400.0, 300.0));
+    }
 
     #[test]
     fn you_do_not_start_facing_a_wall() {

@@ -10,3 +10,6 @@ not a priority, and it never changes once a spec exists.
 | --- | --- |
 | [0001](0001-the-two-lamps.md) | Two lamps, a dark maze, and where to leave them (draft) |
 | [0002](0002-walking-it.md) | Walls you can walk into, and the lamps as light (draft) |
+| [0003](0003-hints.md) | Asking the way out, and deciding how much to be told (draft) |
+| [0004](0004-the-way-out.md) | A door on the edge of the maze, with light coming in (draft) |
+| [0005](0005-getting-out.md) | Grass to walk out onto, and the candles going out (draft) |

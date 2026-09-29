@@ -2,12 +2,16 @@
 
 mod brazier;
 mod candle;
+mod chime;
+mod field;
+mod hints;
 mod lamps;
 mod lantern_game;
 mod lights;
 mod maze;
 mod player;
 mod walls;
+mod way_out;
 
 use blitzkit::start;
 use lantern_game::LanternGame;

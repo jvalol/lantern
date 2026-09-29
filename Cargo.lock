@@ -1131,6 +1131,7 @@ dependencies = [
  "blitzkit",
  "glam",
  "rand 0.8.8",
+ "rodio",
 ]
 
 [[package]]

@@ -28,7 +28,7 @@ pub enum Side {
 impl Side {
     pub const ALL: [Side; 4] = [Side::North, Side::South, Side::East, Side::West];
 
-    fn step(self) -> (i32, i32) {
+    pub fn step(self) -> (i32, i32) {
         match self {
             Side::North => (0, -1),
             Side::South => (0, 1),
@@ -83,8 +83,8 @@ pub fn beside(cell: usize, side: Side) -> Option<usize> {
 }
 
 impl Maze {
-    /// Carves a maze. The exit is the cell furthest from the start, so it is
-    /// never on the doorstep.
+    /// Carves a maze. The way out is the furthest cell that has an outer wall
+    /// to cut, so there is always an outside for it to lead to.
     pub fn carve(rng: &mut impl Rng) -> Self {
         let mut maze = Self {
             open: vec![0; CELLS],
@@ -94,7 +94,8 @@ impl Maze {
 
         maze.carve_only(rng);
         maze.braid(rng);
-        maze.exit = maze.furthest_from(maze.start);
+        maze.exit = maze.furthest_on_the_edge();
+        maze.open[maze.exit] |= maze.way_out().bit();
         maze
     }
 
@@ -164,13 +165,18 @@ impl Maze {
         self.open[cell] & side.bit() != 0
     }
 
-    /// How many steps each cell is from this one, by the only route there is.
+    /// How many steps every cell is from this one.
+    ///
+    /// Breadth first, which in a maze with loops in it is the difference
+    /// between the shortest way and the first way. Taking cells off the end
+    /// instead walks depth first and records whatever route it wandered in on:
+    /// on seed 0 that was 148 steps where the maze allows 84.
     pub fn distances_from(&self, cell: usize) -> Vec<Option<usize>> {
         let mut steps = vec![None; CELLS];
         steps[cell] = Some(0);
-        let mut edge = vec![cell];
+        let mut edge = std::collections::VecDeque::from([cell]);
 
-        while let Some(here) = edge.pop() {
+        while let Some(here) = edge.pop_front() {
             let so_far = steps[here].expect("it is on the edge because it was reached");
 
             for side in Side::ALL {
@@ -182,7 +188,7 @@ impl Maze {
                 };
                 if steps[next].is_none() {
                     steps[next] = Some(so_far + 1);
-                    edge.push(next);
+                    edge.push_back(next);
                 }
             }
         }
@@ -190,14 +196,179 @@ impl Maze {
         steps
     }
 
-    fn furthest_from(&self, cell: usize) -> usize {
-        self.distances_from(cell)
-            .into_iter()
-            .enumerate()
-            .filter_map(|(cell, steps)| steps.map(|steps| (steps, cell)))
+    /// Which way the door out of the exit faces.
+    ///
+    /// A cell on the edge has at least one side with nothing beyond it. A
+    /// corner has two, and either will do.
+    pub fn way_out(&self) -> Side {
+        Side::ALL
+            .iter()
+            .copied()
+            .find(|side| beside(self.exit, *side).is_none())
+            .expect("the way out is on the edge, so it has an outward side")
+    }
+
+    /// The furthest cell from the start that has an outer wall to cut.
+    ///
+    /// Furthest of all is usually somewhere in the middle, and a cell in the
+    /// middle has nothing to be a door in. Picking from the edge brings it
+    /// nearer; that is the price of a way out you can see.
+    fn furthest_on_the_edge(&self) -> usize {
+        let steps = self.distances_from(self.start);
+
+        (0..CELLS)
+            .filter(|cell| Side::ALL.iter().any(|side| beside(*cell, *side).is_none()))
+            .filter_map(|cell| steps[cell].map(|steps| (steps, cell)))
             .max()
             .map(|(_, cell)| cell)
-            .expect("the start is always reachable from itself")
+            .expect("the edge is reachable")
+    }
+}
+
+#[cfg(test)]
+mod way_out_tests {
+    use super::*;
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+
+    fn maze(seed: u64) -> Maze {
+        Maze::carve(&mut StdRng::seed_from_u64(seed))
+    }
+
+    fn on_the_edge(cell: usize) -> bool {
+        let (x, y) = at(cell);
+
+        x == 0 || y == 0 || x == WIDTH - 1 || y == HEIGHT - 1
+    }
+
+    #[test]
+    fn the_way_out_is_on_the_edge() {
+        for seed in 0..20 {
+            let maze = maze(seed);
+
+            assert!(
+                on_the_edge(maze.exit),
+                "seed {}: the way out is at {:?}, in the middle",
+                seed,
+                at(maze.exit)
+            );
+        }
+    }
+
+    #[test]
+    fn the_door_is_open() {
+        for seed in 0..20 {
+            let maze = maze(seed);
+
+            assert!(
+                maze.is_open(maze.exit, maze.way_out()),
+                "seed {}: the door is walled up",
+                seed
+            );
+        }
+    }
+
+    #[test]
+    fn the_door_faces_outwards() {
+        for seed in 0..20 {
+            let maze = maze(seed);
+
+            assert!(
+                beside(maze.exit, maze.way_out()).is_none(),
+                "seed {}: the door opens into the maze",
+                seed
+            );
+        }
+    }
+
+    #[test]
+    fn there_is_still_a_way_there() {
+        for seed in 0..20 {
+            let maze = maze(seed);
+
+            assert!(
+                maze.distances_from(maze.start)[maze.exit].is_some(),
+                "seed {}: no way out at all",
+                seed
+            );
+        }
+    }
+
+    #[test]
+    fn it_is_still_a_long_way_off() {
+        // picking from the edge brings it nearer, and it has to stay a walk
+        let least = (0..20)
+            .map(|seed| {
+                let maze = maze(seed);
+                maze.distances_from(maze.start)[maze.exit].expect("reachable")
+            })
+            .min()
+            .expect("some mazes");
+
+        assert!(
+            least >= 20,
+            "the nearest way out over 20 mazes is {}",
+            least
+        );
+    }
+}
+
+#[cfg(test)]
+mod distance_tests {
+    use super::*;
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+
+    fn maze(seed: u64) -> Maze {
+        Maze::carve(&mut StdRng::seed_from_u64(seed))
+    }
+
+    #[test]
+    fn a_step_changes_the_distance_by_one_at_most() {
+        // the property depth first does not have: two cells with a door
+        // between them cannot be five steps apart
+        for seed in 0..20 {
+            let maze = maze(seed);
+            let steps = maze.distances_from(maze.exit);
+
+            for cell in 0..CELLS {
+                for side in Side::ALL {
+                    if !maze.is_open(cell, side) {
+                        continue;
+                    }
+                    let Some(next) = beside(cell, side) else {
+                        continue;
+                    };
+                    let (Some(here), Some(there)) = (steps[cell], steps[next]) else {
+                        continue;
+                    };
+
+                    assert!(
+                        here.abs_diff(there) <= 1,
+                        "seed {}: {} and {} have a door between them and are {} and {}",
+                        seed,
+                        cell,
+                        next,
+                        here,
+                        there
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn it_is_the_same_distance_back() {
+        for seed in 0..20 {
+            let maze = maze(seed);
+
+            assert_eq!(
+                maze.distances_from(maze.start)[maze.exit],
+                maze.distances_from(maze.exit)[maze.start],
+                "seed {} is further one way than the other",
+                seed
+            );
+        }
     }
 }
 
@@ -311,9 +482,13 @@ mod tests {
             for cell in 0..CELLS {
                 for side in Side::ALL {
                     let Some(next) = beside(cell, side) else {
+                        // one side of one cell opens off the board on purpose,
+                        // and that is the door out. Nothing else does.
+                        let door = cell == maze.exit && side == maze.way_out();
                         assert!(
-                            !maze.is_open(cell, side),
-                            "an edge cell opens off the board"
+                            door || !maze.is_open(cell, side),
+                            "seed {}: an edge cell opens off the board and is not the way out",
+                            seed
                         );
                         continue;
                     };
