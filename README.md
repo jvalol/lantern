@@ -3,8 +3,14 @@
 A dark maze and two lamps to light it with. The game is deciding where to leave
 them: ahead, where you cannot see, or behind, where you will otherwise get lost.
 
-Built on [blitzkit](https://github.com/jvalol/blitzkit), the seventh game on
-that engine.
+You have two candles. Set one down and it keeps burning where you left it. Braziers already
+lit mark some areas and are not movable. Press h for a hint,
+which adds clues from nothing to the whole way out, and m for a map of everywhere your
+own light has fallen. Walk out through the door at the end you win!
 
-Nothing draws yet. `specs/0001-the-two-lamps.md` is the game, and `src/maze.rs`
-and `src/lamps.rs` are the parts of it that need no window.
+Built on [blitzkit](https://github.com/jvalol/blitzkit), the seventh game on
+that engine, and the first to use its point light shadows.
+
+```
+cargo run
+```
