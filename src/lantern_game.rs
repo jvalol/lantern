@@ -18,6 +18,7 @@ use crate::hints::{Hint, Route};
 use crate::lamps::Lamps;
 use crate::lights;
 use crate::maze::{self, Maze};
+use crate::minimap::Map;
 use crate::player::Player;
 use crate::walls::{self, cell_centre};
 
@@ -93,6 +94,9 @@ pub struct LanternGame {
     height: f32,
     ending: RenderText,
     hint: Hint,
+    /// What your own light has fallen on, and whether you are looking at it.
+    map: Map,
+    show_map: bool,
     route: Route,
     hint_line: RenderText,
     player: Player,
@@ -151,6 +155,8 @@ impl LanternGame {
                 ..Default::default()
             },
             hint: Hint::default(),
+            map: Map::new(),
+            show_map: true,
             route,
             player,
             lamps: Lamps::new(),
@@ -337,6 +343,29 @@ impl Game for LanternGame {
 
         self.update_readout();
 
+        // your own light, and only yours: the candles in hand light where you
+        // are, and the ones you set down go on lighting where they are. See
+        // spec 0006.
+        let mut candles: Vec<usize> = self.lamps.standing();
+        if self.lamps.carried() > 0 && !self.out {
+            candles.push(self.cell());
+        }
+        self.map.record(&self.maze, &candles);
+
+        if self.show_map && !self.out {
+            let facing = self.player.forward();
+            for quad in crate::minimap::quads(
+                &self.map,
+                &self.maze,
+                vec2(self.width, self.height),
+                self.cell(),
+                vec2(facing.x, facing.z),
+                &self.lamps.standing(),
+            ) {
+                geometry.push_quad(&quad);
+            }
+        }
+
         // two lines at heights of our own, because a wrapped line's leading is
         // the font's and it is too tight to read
         let wide = vec2(
@@ -512,6 +541,11 @@ impl Game for LanternGame {
                 }
             }
             // one key: take up the one you are standing at, or put one down
+            KeyboardKey::M => {
+                if down {
+                    self.show_map = !self.show_map;
+                }
+            }
             KeyboardKey::H => {
                 if down {
                     self.hint = self.hint.next();
@@ -646,6 +680,38 @@ mod tests {
         game.ending.position = vec2(game.width * 0.5, game.height * 0.5);
 
         assert_eq!(game.ending.position, vec2(400.0, 300.0));
+    }
+
+    #[test]
+    fn the_map_key_shows_and_hides_it() {
+        let mut game = LanternGame::new();
+        let press = |key| KeyboardInput::new(key, KeyboardKeyState::Pressed, false);
+
+        assert!(game.show_map, "it starts shown");
+
+        game.process_keyboard(press(KeyboardKey::M));
+        assert!(!game.show_map);
+
+        game.process_keyboard(press(KeyboardKey::M));
+        assert!(game.show_map);
+    }
+
+    #[test]
+    fn carrying_a_candle_writes_where_you_are() {
+        let mut game = LanternGame::new();
+        let here = game.cell();
+
+        assert!(
+            !game.map.is_written(here),
+            "written before anything happened"
+        );
+
+        let standing = game.lamps.standing();
+        let mut candles = standing.clone();
+        candles.push(here);
+        game.map.record(&game.maze, &candles);
+
+        assert!(game.map.is_written(here));
     }
 
     #[test]

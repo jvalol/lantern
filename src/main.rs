@@ -9,6 +9,7 @@ mod lamps;
 mod lantern_game;
 mod lights;
 mod maze;
+mod minimap;
 mod player;
 mod walls;
 mod way_out;
