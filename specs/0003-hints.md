@@ -43,6 +43,10 @@ the way out is computed once, because the maze does not change, and the route
 from anywhere is the walk down that. Go the wrong way on purpose and the marks
 lead out from where you end up, rather than back to where they were drawn.
 
+**The way out gets no mark.** Spec 0004 lights the threshold there, and two
+discs on one cell, one white and one blue and both most of a cell across, is one
+too many. The route still runs to it; only the mark on it is dropped.
+
 **Standing on the way out, there is nothing left to show.**
 
 ## Acceptance criteria
@@ -54,6 +58,8 @@ lead out from where you end up, rather than back to where they were drawn.
 - Off shows nothing. — `hints::tests::off_shows_nothing`
 - Each setting shows at least as much as the one below. — `hints::tests::each_setting_shows_more_than_the_last`
 - The whole way is the whole way. — `hints::tests::the_whole_way_is_the_whole_way`
+- The way out is lit, not marked as well. — `hints::tests::the_way_out_is_not_marked_twice`
+- And nothing else is dropped. — `hints::tests::a_mark_is_dropped_only_at_the_way_out`
 - A whisper is one cell and a trail is five. — `hints::tests::a_whisper_is_one_and_a_trail_is_five`
 - It leads out from wherever you are, not from where you began. — `hints::tests::it_leads_out_from_wherever_you_are`
 - The key cycles, and comes back to off. — `lantern_game::tests::the_hint_key_cycles_back_to_off`

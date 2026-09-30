@@ -457,7 +457,7 @@ impl Game for LanternGame {
                 1.0,
             );
 
-            for cell in self.route.shown(&self.maze, self.cell(), self.hint) {
+            for cell in self.route.marks(&self.maze, self.cell(), self.hint) {
                 scene.push_colored(mark, &Transform::at(crate::hints::mark_at(cell)), look);
             }
         }

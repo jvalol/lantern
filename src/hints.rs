@@ -135,6 +135,19 @@ impl Route {
         route.truncate(hint.cells());
         route
     }
+
+    /// The part of it that gets a mark on the floor.
+    ///
+    /// Everything `shown` says except the way out, which spec 0004 already
+    /// lights. Two discs on the same cell, one white and one blue and both most
+    /// of a cell across, is one disc too many, and the one the game ends on
+    /// should not be the one underneath.
+    pub fn marks(&self, maze: &Maze, cell: usize, hint: Hint) -> Vec<usize> {
+        self.shown(maze, cell, hint)
+            .into_iter()
+            .filter(|step| *step != maze.exit)
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -240,6 +253,49 @@ mod tests {
 
         assert_eq!(route.shown(&maze, maze.start, Hint::Whisper).len(), 1);
         assert_eq!(route.shown(&maze, maze.start, Hint::Trail).len(), TRAIL);
+    }
+
+    #[test]
+    fn the_way_out_is_not_marked_twice() {
+        // spec 0004 lights the threshold, so a hint mark there as well is two
+        // discs on one cell
+        let maze = maze(3);
+        let route = Route::of(&maze);
+        let steps = maze.distances_from(maze.exit);
+        let one_away = (0..maze::CELLS)
+            .find(|cell| steps[*cell] == Some(1))
+            .expect("something adjoins the way out");
+
+        assert!(
+            route
+                .shown(&maze, one_away, Hint::Whisper)
+                .contains(&maze.exit),
+            "the route does not lead to the way out"
+        );
+        assert!(
+            !route
+                .marks(&maze, one_away, Hint::Whisper)
+                .contains(&maze.exit),
+            "the way out is marked as well as lit"
+        );
+    }
+
+    #[test]
+    fn a_mark_is_dropped_only_at_the_way_out() {
+        let maze = maze(3);
+        let route = Route::of(&maze);
+
+        for hint in Hint::ALL {
+            let shown = route.shown(&maze, maze.start, hint);
+            let marks = route.marks(&maze, maze.start, hint);
+            let dropped: Vec<_> = shown.iter().filter(|cell| !marks.contains(cell)).collect();
+
+            assert!(
+                dropped.iter().all(|cell| **cell == maze.exit),
+                "{:?} dropped something that was not the way out",
+                hint
+            );
+        }
     }
 
     #[test]
