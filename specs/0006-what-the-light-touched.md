@@ -46,18 +46,36 @@ sight, which costs more than the map is worth.
 **What is written stays written.** Walking away does not forget, and picking a
 candle back up does not unwrite what it lit.
 
-**It is drawn in the bottom right**, as quads: one per recorded
-cell, the walls between recorded cells as thin ones, a mark for you and which
-way you face, and a mark for each candle you have set down. Nothing for the way
-out.
+**It is drawn in the bottom right**, as quads: a card the size of the maze, a
+cell on it for every cell of the maze, the recorded ones bright, the walls
+between recorded cells as thin ones, a mark for you and which way you face, and
+a mark for each candle you have set down. Nothing for the way out.
 
-Nothing under it. A panel behind it reads as another thing on the screen rather
-than as the ground the map sits on, and the screen already has enough on it.
+The card and the unlit cells are a reversal. This spec used to say nothing under
+it and no frame, on the grounds that a map of five cells inside an outline of
+256 is mostly empty rectangle. That was right about the rectangle and wrong
+about what it costs. A map of only what you have seen has no shape until you
+have seen a lot, and three pale cells with no extent and no boundary do not read
+as a map at all: they read as a mark on the wall, which is what Jake called them
+on 2026-10-01. The empty rectangle is the map saying how much there is left.
 
-No frame and no label either. A map of five cells inside an outline of two
-hundred and fifty six is mostly empty rectangle, and saying so in a line of text
-beside it only adds a third thing to read. What makes it legible is being big
-enough and being where you expect it, not being annotated.
+So it now says two things it did not: how big the maze is, and where in it you
+are standing. It still says nothing about its walls, its corridors, the way out,
+or anything else you have not lit. Those two facts are worth a map that reads as
+one, and neither of them shortens the walk.
+
+The card carries the padding, so the grid has a margin and the lit cells never
+touch the edge. The unlit cells are drawn one per cell rather than as one flat
+tone, which costs nothing now and leaves room for the unexplored part to differ
+cell by cell later.
+
+**A wall lies on the edge between two cells**, half a cell out from the middle
+of either. A quad sits on its middle and so does a cell, so a wall drawn at the
+cell's own place runs through the middle of it, and a cell walled north and west
+came out as a plus sign. Standing at a dead end the map showed a cross. The
+candle marks and your own arrow had the same fault in the other direction, half
+a cell into the corner of their cells, which is most of why the arrow never read
+clearly.
 
 **M shows and hides it**, the way H steps the hints.
 
@@ -74,6 +92,7 @@ enough and being where you expect it, not being annotated.
 - The way out is never on it. — `minimap::tests::the_way_out_is_not_on_the_map`
 - Only recorded cells are drawn. — `minimap::tests::only_what_is_recorded_is_drawn`
 - A wall is drawn only between two recorded cells. — `minimap::tests::a_wall_needs_both_sides_recorded`
+- And lies on the edge between them, not through either. — `minimap::tests::a_wall_lies_on_the_edge_between_two_cells`
 - You are where you are on it. — `minimap::tests::you_are_where_you_are`
 - It sits clear of the text, whatever the window. — `minimap::tests::it_keeps_out_of_the_way_of_the_text`
 - M shows it and hides it. — `lantern_game::tests::the_map_key_shows_and_hides_it`
@@ -90,5 +109,6 @@ enough and being where you expect it, not being annotated.
 ## Out of scope
 
 Line of sight. A map of where you have walked rather than where you have seen.
-Anything on it that you have not lit: the way out, the braziers you have not
-reached, the shape of the maze beyond your light. Scrolling or zooming it.
+Anything on it that you have not lit beyond the bare fact that a cell is there:
+the way out, the braziers you have not reached, which of the dark is corridor
+and which is wall. Scrolling or zooming it. A label.

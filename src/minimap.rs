@@ -20,13 +20,30 @@ use crate::walls::CELL;
 pub const REACH: usize = (LAMP_RANGE / CELL) as usize;
 
 /// How big a cell is drawn, and the line between two of them.
-pub const CELL_PIXELS: f32 = 20.0;
+pub const CELL_PIXELS: f32 = 26.0;
 pub const WALL_PIXELS: f32 = 3.0;
 
 /// How far in from the corner it sits.
 pub const MARGIN: f32 = 20.0;
 
-pub const FLOOR: Vec4 = vec4(0.62, 0.66, 0.74, 0.55);
+pub const FLOOR: Vec4 = vec4(0.76, 0.80, 0.88, 0.92);
+/// The card the map is drawn on, and how far it reaches past the cells.
+///
+/// Three lit cells on their own have no extent and no boundary, and read as a
+/// mark on the wall rather than a map. The card gives the map its shape without
+/// drawing a cell you have not lit.
+///
+/// Dark rather than grey. A pale card over a lit wall is the wall, and the
+/// point is that this is over the world rather than in it.
+pub const CARD: Vec4 = vec4(0.05, 0.055, 0.075, 0.62);
+pub const CARD_PAD: f32 = 10.0;
+
+/// The cells you have not lit yet, drawn on the card.
+///
+/// The card alone gives the map its shape. This says which of it is maze and
+/// which is margin, and leaves the unexplored part something that can differ
+/// cell by cell later rather than one flat tone.
+pub const UNLIT: Vec4 = vec4(0.55, 0.58, 0.66, 0.14);
 pub const WALL: Vec4 = vec4(0.10, 0.11, 0.14, 0.85);
 /// You, in the one colour nothing else on the map uses. Warm against warm was
 /// the trouble: a candle mark and a player mark in the same amber read as two
@@ -116,8 +133,8 @@ pub fn corner(window: Vec2) -> Vec2 {
     let down = maze::HEIGHT as f32 * CELL_PIXELS;
 
     vec2(
-        (window.x - across - MARGIN).max(MARGIN),
-        (window.y - down - MARGIN).max(MARGIN),
+        (window.x - across - MARGIN - CARD_PAD).max(MARGIN + CARD_PAD),
+        (window.y - down - MARGIN - CARD_PAD).max(MARGIN + CARD_PAD),
     )
 }
 
@@ -141,6 +158,27 @@ pub fn quads(
     };
 
     let mut quads = Vec::new();
+
+    // the card, which is the whole maze's worth of room whether or not any of
+    // it is lit yet
+    let across = maze::WIDTH as f32 * CELL_PIXELS;
+    let down = maze::HEIGHT as f32 * CELL_PIXELS;
+    // a quad's position is its middle, and a cell's is too, so the card's
+    // middle is half a maze along from the first cell rather than the corner
+    let middle = at
+        + vec2(
+            (maze::WIDTH - 1) as f32 * CELL_PIXELS * 0.5,
+            (maze::HEIGHT - 1) as f32 * CELL_PIXELS * 0.5,
+        );
+    quads.push(Quad::colored(
+        middle,
+        vec2(across + CARD_PAD * 2.0, down + CARD_PAD * 2.0),
+        CARD,
+    ));
+
+    for cell in 0..maze::CELLS {
+        quads.push(Quad::colored(place(cell), Vec2::splat(CELL_PIXELS), UNLIT));
+    }
 
     for cell in 0..maze::CELLS {
         if !map.is_written(cell) {
@@ -168,35 +206,30 @@ pub fn quads(
                 continue;
             }
 
-            let size = match side {
-                Side::North => vec2(CELL_PIXELS, WALL_PIXELS),
-                _ => vec2(WALL_PIXELS, CELL_PIXELS),
+            // a quad sits on its middle, and so does a cell, so a wall drawn
+            // at the cell's own place runs through the middle of it: a cell
+            // walled north and west came out as a cross. It belongs on the
+            // edge the two cells share, half a cell out.
+            let half = CELL_PIXELS * 0.5;
+            let (size, from_middle) = match side {
+                Side::North => (vec2(CELL_PIXELS, WALL_PIXELS), vec2(0.0, -half)),
+                _ => (vec2(WALL_PIXELS, CELL_PIXELS), vec2(-half, 0.0)),
             };
 
-            quads.push(Quad::colored(place(cell), size, WALL));
+            quads.push(Quad::colored(place(cell) + from_middle, size, WALL));
         }
     }
 
     for candle in standing {
-        let middle = place(*candle) + Vec2::splat(CELL_PIXELS * 0.5);
-
-        quads.push(Quad::colored(
-            middle - Vec2::splat(2.0),
-            Vec2::splat(4.0),
-            CANDLE,
-        ));
+        quads.push(Quad::colored(place(*candle), Vec2::splat(4.0), CANDLE));
     }
 
     // you, and where you are looking. A dot and one nub read as two specks and
     // said nothing about which way round they went. A dot with a tapering point
     // off it reads as an arrow whichever way it lies, and quads cannot turn.
-    let middle = place(you) + Vec2::splat(CELL_PIXELS * 0.5);
+    let middle = place(you);
     let wide = CELL_PIXELS * YOU_WIDE;
-    quads.push(Quad::colored(
-        middle - Vec2::splat(wide * 0.5),
-        Vec2::splat(wide),
-        YOU,
-    ));
+    quads.push(Quad::colored(middle, Vec2::splat(wide), YOU));
 
     let point = facing.normalize_or_zero();
     for mark in 0..POINT_MARKS {
@@ -205,7 +238,7 @@ pub fn quads(
         let size = wide * (1.0 - along * 0.7);
 
         quads.push(Quad::colored(
-            middle + point * CELL_PIXELS * out - Vec2::splat(size * 0.5),
+            middle + point * CELL_PIXELS * out,
             Vec2::splat(size),
             YOU,
         ));
@@ -357,9 +390,14 @@ mod tests {
             + vec2(maze::at(maze.exit).0 as f32, maze::at(maze.exit).1 as f32) * CELL_PIXELS;
 
         if !map.is_written(maze.exit) {
+            // the unlit field covers every cell, the exit's included, which
+            // says nothing about it. What must not be there is anything that
+            // tells that cell apart from the rest of the dark.
             assert!(
-                !drawn.iter().any(|q| (q.position - exit).length() < 1.0),
-                "the way out is drawn and nothing has lit it"
+                !drawn
+                    .iter()
+                    .any(|q| (q.position - exit).length() < 1.0 && q.color != UNLIT),
+                "the way out is marked and nothing has lit it"
             );
         }
     }
@@ -421,12 +459,14 @@ mod tests {
         map.record(&maze, &[you]);
 
         let window = vec2(800.0, 600.0);
-        let mine = corner(window) + vec2(11.0, 6.0) * CELL_PIXELS + Vec2::splat(CELL_PIXELS * 0.5);
+        let mine = corner(window) + vec2(11.0, 6.0) * CELL_PIXELS;
 
+        // a quad sits on its middle, so the mark's own position is the cell's,
+        // within a fraction of a cell rather than within a whole one
         let found = quads(&map, &maze, window, you, Vec2::Y, &[])
             .into_iter()
             .filter(|q| q.color == YOU)
-            .any(|q| (q.position + q.size * 0.5 - mine).length() < CELL_PIXELS);
+            .any(|q| (q.position - mine).length() < CELL_PIXELS * 0.1);
 
         assert!(found, "no mark where you are standing");
     }
@@ -441,13 +481,13 @@ mod tests {
         map.record(&maze, &[you]);
 
         let window = vec2(800.0, 600.0);
-        let middle = corner(window) + vec2(8.0, 8.0) * CELL_PIXELS + Vec2::splat(CELL_PIXELS * 0.5);
+        let middle = corner(window) + vec2(8.0, 8.0) * CELL_PIXELS;
         let facing = vec2(0.0, -1.0);
 
         let marks: Vec<Vec2> = quads(&map, &maze, window, you, facing, &[])
             .into_iter()
             .filter(|q| q.color == YOU)
-            .map(|q| q.position + q.size * 0.5 - middle)
+            .map(|q| q.position - middle)
             .filter(|off| off.length() > 1.0)
             .collect();
 
@@ -461,6 +501,49 @@ mod tests {
                 off,
                 facing
             );
+        }
+    }
+
+    #[test]
+    fn a_wall_lies_on_the_edge_between_two_cells() {
+        // it lay on the cell's own middle, so a cell walled north and west
+        // came out as a cross through it. Jake was looking at a dead end and
+        // the map showed a plus sign.
+        let maze = maze();
+        let mut map = Map::new();
+        for cell in 0..maze::CELLS {
+            map.record(&maze, &[cell]);
+        }
+
+        let window = vec2(800.0, 600.0);
+        let at = corner(window);
+        let place = |cell: usize| {
+            let (x, y) = maze::at(cell);
+            at + vec2(x as f32, y as f32) * CELL_PIXELS
+        };
+
+        let walls: Vec<Vec2> = quads(&map, &maze, window, maze.start, Vec2::Y, &[])
+            .into_iter()
+            .filter(|q| q.color == WALL)
+            .map(|q| q.position)
+            .collect();
+
+        assert!(!walls.is_empty(), "a carved maze has walls in it");
+
+        let half = CELL_PIXELS * 0.5;
+        for wall in &walls {
+            let on_an_edge = (0..maze::CELLS).any(|cell| {
+                let middle = place(cell);
+
+                (*wall - (middle - vec2(0.0, half))).length() < 1e-3
+                    || (*wall - (middle - vec2(half, 0.0))).length() < 1e-3
+            });
+
+            assert!(on_an_edge, "a wall at {:?} is on no cell's edge", wall);
+
+            let through_a_cell = (0..maze::CELLS).any(|cell| (*wall - place(cell)).length() < 1e-3);
+
+            assert!(!through_a_cell, "a wall at {:?} runs through a cell", wall);
         }
     }
 
