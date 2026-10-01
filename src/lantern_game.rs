@@ -110,7 +110,27 @@ pub struct LanternGame {
     wants_lock: bool,
     quitting: bool,
     readout: RenderText,
-    controls: RenderText,
+    /// The controls, a line each. One text with the whole sentence in it wrapped
+    /// at the window, and a wrapped line's leading is the font's own, so those
+    /// two lines sat half the gap apart that every other pair of lines did.
+    controls: [RenderText; 2],
+}
+
+/// The readout across the top: how big it is, where it starts, and how far
+/// apart its lines sit.
+///
+/// Apart is more than the size, so a line of space sits between lines. One
+/// text per line rather than one text with the lot in it, because a wrapped
+/// line's leading is the font's own, which is tighter than this and made the
+/// block read as two crammed lines with gaps either side.
+pub const HUD_SIZE: f32 = 20.0;
+pub const HUD_LEFT: f32 = 20.0;
+pub const HUD_TOP: f32 = 20.0;
+pub const HUD_APART: f32 = HUD_SIZE * 1.6;
+
+/// Where line `n` of the readout sits, counting from nothing.
+pub fn hud_line(n: usize) -> glam::Vec2 {
+    vec2(HUD_LEFT, HUD_TOP + n as f32 * HUD_APART)
 }
 
 impl LanternGame {
@@ -166,26 +186,35 @@ impl LanternGame {
             wants_lock: true,
             quitting: false,
             readout: RenderText {
-                position: vec2(20.0, 20.0),
+                position: hud_line(0),
                 color: vec4(1.0, 1.0, 1.0, 0.9),
-                size: 20.0,
+                size: HUD_SIZE,
                 ..Default::default()
             },
             hint_line: RenderText {
-                position: vec2(20.0, 104.0),
+                position: hud_line(3),
                 color: vec4(1.0, 1.0, 1.0, 0.55),
-                size: 20.0,
+                size: HUD_SIZE,
                 ..Default::default()
             },
-            controls: RenderText {
-                position: vec2(20.0, 52.0),
-                color: vec4(1.0, 1.0, 1.0, 0.55),
-                size: 20.0,
-                text: String::from(
-                    "Press the left and right arrow keys to rotate, wasd keys or the mouse to move, and press space to place or pick up a candle",
-                ),
-                ..Default::default()
-            },
+            controls: [
+                RenderText {
+                    position: hud_line(1),
+                    color: vec4(1.0, 1.0, 1.0, 0.55),
+                    size: HUD_SIZE,
+                    text: String::from(
+                        "Press the left and right arrow keys to rotate, wasd keys or the mouse to move,",
+                    ),
+                    ..Default::default()
+                },
+                RenderText {
+                    position: hud_line(2),
+                    color: vec4(1.0, 1.0, 1.0, 0.55),
+                    size: HUD_SIZE,
+                    text: String::from("and press space to place or pick up a candle"),
+                    ..Default::default()
+                },
+            ],
         }
     }
 
@@ -366,21 +395,25 @@ impl Game for LanternGame {
             }
         }
 
-        // two lines at heights of our own, because a wrapped line's leading is
+        // every line at a height of our own, because a wrapped line's leading is
         // the font's and it is too tight to read
         let wide = vec2(
             self.width - 40.0,
             blitzkit::renderer::render_text::UNBOUNDED_F32,
         );
         self.readout.bounds = wide;
-        self.controls.bounds = wide;
+        for line in &mut self.controls {
+            line.bounds = wide;
+        }
 
         if !self.out {
             text_renderer.render_texts.push(self.readout.clone());
         }
         self.hint_line.bounds = wide;
         self.hint_line.text = format!("Hint: {}. Press h to make it hintier.", self.hint.name());
-        text_renderer.render_texts.push(self.controls.clone());
+        for line in &self.controls {
+            text_renderer.render_texts.push(line.clone());
+        }
         text_renderer.render_texts.push(self.hint_line.clone());
 
         if self.out {
@@ -680,6 +713,40 @@ mod tests {
         game.ending.position = vec2(game.width * 0.5, game.height * 0.5);
 
         assert_eq!(game.ending.position, vec2(400.0, 300.0));
+    }
+
+    #[test]
+    fn the_readout_lines_are_evenly_spaced() {
+        // the controls were one text with the whole sentence in it, which the
+        // window wrapped into two lines a font size apart while every other
+        // pair sat 32 apart. Two crammed lines with gaps either side.
+        let game = LanternGame::new();
+        let lines = [
+            game.readout.position,
+            game.controls[0].position,
+            game.controls[1].position,
+            game.hint_line.position,
+        ];
+
+        for pair in lines.windows(2) {
+            assert_eq!(pair[0].x, pair[1].x, "the lines do not share a left edge");
+            assert_eq!(
+                pair[1].y - pair[0].y,
+                HUD_APART,
+                "{:?} to {:?}",
+                pair[0],
+                pair[1]
+            );
+        }
+
+        assert!(
+            hud_line(1).y - hud_line(0).y > game.readout.size,
+            "the lines would touch"
+        );
+
+        for text in [&game.controls[0], &game.controls[1]] {
+            assert!(!text.text.contains('\n'), "a line carries its own newline");
+        }
     }
 
     #[test]
