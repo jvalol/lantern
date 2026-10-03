@@ -14,3 +14,7 @@ not a priority, and it never changes once a spec exists.
 | [0004](0004-the-way-out.md) | A door on the edge of the maze, with light coming in (draft) |
 | [0005](0005-getting-out.md) | Grass to walk out onto, and the candles going out (draft) |
 | [0006](0006-what-the-light-touched.md) | A map of what your own light has fallen on, and nothing else (draft) |
+
+---
+
+I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.
