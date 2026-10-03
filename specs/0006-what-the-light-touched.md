@@ -5,9 +5,9 @@
 
 ## Goal
 
-A hundred cells of dark maze is more than anyone holds in their head, and the
-thing that goes wrong is not getting lost, it is walking a corridor for the
-third time without knowing it. Somewhere to put what you have already seen.
+A hundred cells of dark maze is more than anyone holds in their head. What goes
+wrong is not getting lost, it is walking a corridor for the third time without
+knowing it. Somewhere to put what you have already seen.
 
 ## Behavior
 
@@ -23,10 +23,9 @@ a candle in hand records it like anywhere else, so there is no exception to
 explain, only a rule about whose light it is.
 
 **A candle you leave behind goes on recording.** It lights its corridor whether
-you are in it or not, and what it lights is written down. This is the whole
-reason to build the map on light rather than on footsteps: the two candles were
-already a decision about where to see, and now they are a decision about what to
-keep.
+you are in it or not, and what it lights is written down. Which is the reason
+to build the map on light rather than footsteps. The two candles were already a
+decision about where to see, and now about what to keep.
 
 **Walking dark is walking unrecorded.** Both candles set down at the far end of
 the maze and you cross it in the dark, and the map learns nothing from the
@@ -51,13 +50,13 @@ cell on it for every cell of the maze, the recorded ones bright, the walls
 between recorded cells as thin ones, a mark for you and which way you face, and
 a mark for each candle you have set down. Nothing for the way out.
 
-The card and the unlit cells are a reversal. This spec used to say nothing under
-it and no frame, on the grounds that a map of five cells inside an outline of
-256 is mostly empty rectangle. That was right about the rectangle and wrong
-about what it costs. A map of only what you have seen has no shape until you
-have seen a lot, and three pale cells with no extent and no boundary do not read
-as a map at all: they read as a mark on the wall, which is what Jake called them
-on 2026-10-01. The empty rectangle is the map saying how much there is left.
+The card and the unlit cells are a reversal. This spec used to say nothing
+under it and no frame, on the grounds that a map of five cells inside an
+outline of 256 is mostly empty rectangle. That was right about the rectangle
+and wrong about what it costs. A map of only what you have seen has no shape
+until you have seen a lot. Three pale cells with no extent and no boundary do
+not read as a map. Jake called them a mark on the wall, 2026-10-01. The empty
+rectangle is the map saying how much there is left.
 
 So it now says two things it did not: how big the maze is, and where in it you
 are standing. It still says nothing about its walls, its corridors, the way out,
@@ -71,11 +70,11 @@ cell by cell later.
 
 **A wall lies on the edge between two cells**, half a cell out from the middle
 of either. A quad sits on its middle and so does a cell, so a wall drawn at the
-cell's own place runs through the middle of it, and a cell walled north and west
+cell's own place runs through the middle of it. A cell walled north and west
 came out as a plus sign. Standing at a dead end the map showed a cross. The
 candle marks and your own arrow had the same fault in the other direction, half
-a cell into the corner of their cells, which is most of why the arrow never read
-clearly.
+a cell into the corner of their cells, which is most of why the arrow never
+read clearly.
 
 **M shows and hides it**, the way H steps the hints.
 
@@ -109,6 +108,6 @@ clearly.
 ## Out of scope
 
 Line of sight. A map of where you have walked rather than where you have seen.
-Anything on it that you have not lit beyond the bare fact that a cell is there:
-the way out, the braziers you have not reached, which of the dark is corridor
-and which is wall. Scrolling or zooming it. A label.
+Anything you have not lit beyond the bare fact that a cell is there: the way
+out, the braziers you have not reached, which of the dark is corridor and which
+is wall. Scrolling or zooming it. A label.

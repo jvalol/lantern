@@ -39,10 +39,9 @@ const HEIGHT: f32 = STANDS;
 pub fn fixed_cells(maze: &Maze) -> Vec<usize> {
     let count = MAX_POINT_LIGHTS - crate::lamps::LAMPS;
 
-    // never at a dead end: a light down a stub lights a place nobody needs to
-    // see, and the point of these is to make the through routes walkable
-    // nor where you stand at the start or finish: something solid in the cell
-    // you spawn in is something you spawn inside
+    // never at a dead end, since a light down a stub lights a place nobody
+    // needs to see, and nor where you stand at the start or finish, since
+    // something solid in the cell you spawn in is something you spawn inside
     let ends = maze.dead_ends();
     let open: Vec<usize> = (0..maze::CELLS)
         .filter(|c| !ends.contains(c) && *c != maze.start && *c != maze.exit)
