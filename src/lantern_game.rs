@@ -224,7 +224,6 @@ impl LanternGame {
         game
     }
 
-    /// Which cell you are standing in.
     /// Whether you have walked out through the door.
     ///
     /// Crossing the line the wall stood on, rather than arriving in the cell.
@@ -296,6 +295,7 @@ impl LanternGame {
     /// How long the staged player walks away from the candle, in seconds.
     const POSED_AWAY: f32 = 1.6;
 
+    /// Which cell you are standing in.
     fn cell(&self) -> usize {
         (0..maze::CELLS)
             .min_by(|a, b| {
