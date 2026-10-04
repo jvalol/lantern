@@ -3,6 +3,8 @@
 A dark maze and two lamps to light it with. The game is deciding where to leave
 them: ahead, where you cannot see, or behind, where you will otherwise get lost.
 
+![A candle standing in a corridor, lighting the walls and casting its own shadow, a second candle carried in the foreground, and a dark side passage to the left](media/screenshot.png)
+
 You have two candles. Set one down and it keeps burning where you left it. Braziers already
 lit mark some areas and are not movable. Press h for a hint,
 which adds clues from nothing to the whole way out, and m for a map of everywhere your

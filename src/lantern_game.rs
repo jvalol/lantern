@@ -150,7 +150,7 @@ impl LanternGame {
         let mut player = Player::at(cell_centre(maze.start));
         player.yaw = facing_a_way_out(&maze);
 
-        Self {
+        let mut game = Self {
             maze,
             walls,
             mesh: None,
@@ -215,7 +215,13 @@ impl LanternGame {
                     ..Default::default()
                 },
             ],
+        };
+
+        if crate::staged() {
+            game.pose();
         }
+
+        game
     }
 
     /// Which cell you are standing in.
@@ -265,6 +271,30 @@ impl LanternGame {
             if steps == 1 { "cell" } else { "cells" }
         );
     }
+
+    /// Puts a candle down and steps away from it, for the camera. See
+    /// `refresh-screenshots`.
+    ///
+    /// The opening frame is a corridor in the dark with the player's own light
+    /// in it, which is a picture of a dark corridor. The game is what a light
+    /// you have put down does to a place, so this leaves one burning and walks
+    /// off far enough to see it do that, then turns to look back at it.
+    fn pose(&mut self) {
+        let here = self.cell();
+        self.lamps.put_down(here);
+
+        // away from it along whatever the player is already facing, then round
+        let forward = self.player.forward();
+        let mut gone = 0.0;
+        while gone < Self::POSED_AWAY {
+            self.player.walk(forward, 1.0 / 60.0, &self.walls);
+            gone += 1.0 / 60.0;
+        }
+        self.player.turn(std::f32::consts::PI);
+    }
+
+    /// How long the staged player walks away from the candle, in seconds.
+    const POSED_AWAY: f32 = 1.6;
 
     fn cell(&self) -> usize {
         (0..maze::CELLS)
