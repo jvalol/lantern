@@ -5,6 +5,7 @@ use blitzkit::collision::Aabb;
 use blitzkit::geometry::Geometry;
 use blitzkit::keyboard::{KeyboardInput, KeyboardKey, KeyboardKeyState};
 use blitzkit::mesh::Transform;
+use blitzkit::notice;
 use blitzkit::renderer::render_text::{RenderText, TextRenderer};
 use blitzkit::renderer::scene::{MeshId, Scene};
 use blitzkit::renderer::Renderer;
@@ -436,18 +437,30 @@ impl Game for LanternGame {
             line.bounds = wide;
         }
 
-        if !self.out {
-            text_renderer.render_texts.push(self.readout.clone());
-        }
         self.hint_line.bounds = wide;
         self.hint_line.text = format!("Hint: {}. Press h to make it hintier.", self.hint.name());
-        for line in &self.controls {
-            text_renderer.render_texts.push(line.clone());
+
+        let mut lines = Vec::new();
+        if !self.out {
+            lines.push(self.readout.clone());
         }
-        text_renderer.render_texts.push(self.hint_line.clone());
+        for line in &self.controls {
+            lines.push(line.clone());
+        }
+        lines.push(self.hint_line.clone());
+
+        // the readout and the ending each go on a panel, so they read over the
+        // maze rather than into it. See blitzkit's spec 0038.
+        for quad in notice::framing_all(&lines).iter().flatten() {
+            geometry.push_quad(quad);
+        }
+        text_renderer.render_texts.extend(lines);
 
         if self.out {
             self.ending.position = vec2(self.width * 0.5, self.height * 0.5);
+            for quad in notice::framing(&self.ending).iter() {
+                geometry.push_quad(quad);
+            }
             text_renderer.render_texts.push(self.ending.clone());
         }
     }
