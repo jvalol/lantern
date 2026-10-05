@@ -61,7 +61,23 @@ pub fn colliders(maze: &Maze) -> Vec<Aabb> {
     boxes
 }
 
-/// The maze as one mesh: a floor under every cell and a slab at every wall.
+/// The slab over a cell, at the top of the walls.
+///
+/// A cell wide, so neighbouring slabs meet edge to edge over the middle of
+/// whatever wall is between them and leave no seam to see the dark through.
+pub fn ceiling_box(cell: usize) -> Aabb {
+    Aabb::from_center_size(
+        cell_centre(cell) + Vec3::Y * (TALL + THICK * 0.5),
+        vec3(CELL, THICK, CELL),
+    )
+}
+
+/// The maze as one mesh: a floor under every cell, a slab over it, and a slab
+/// at every wall.
+///
+/// The ceiling was out of scope until a player looked up and found the tops of
+/// the walls, lit, with nothing above them. A maze you are meant to be lost in
+/// is a maze you cannot see out of.
 pub fn mesh(maze: &Maze) -> MeshData {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
@@ -88,6 +104,7 @@ pub fn mesh(maze: &Maze) -> MeshData {
             vec3(CELL, THICK, CELL),
         );
         add(&floor);
+        add(&ceiling_box(cell));
     }
 
     for bounds in colliders(maze) {
@@ -191,5 +208,23 @@ mod tests {
         let last = cell_centre(maze::CELLS - 1);
 
         assert!((first + last).length() < 1e-4, "the grid is off centre");
+    }
+
+    #[test]
+    fn a_ceiling_sits_on_top_of_the_walls() {
+        let bounds = ceiling_box(0);
+
+        assert!((bounds.min.y - TALL).abs() < 1e-5);
+        assert!((bounds.max.y - (TALL + THICK)).abs() < 1e-5);
+    }
+
+    #[test]
+    fn the_ceiling_leaves_no_gap_between_cells() {
+        // cell 0 and the cell east of it, whose slabs must meet
+        let east = maze::beside(0, Side::East).expect("the grid is wider than one cell");
+        let (near, far) = (ceiling_box(0), ceiling_box(east));
+
+        assert!(far.min.x <= near.max.x + 1e-5);
+        assert!(far.min.x >= near.max.x - 1e-5);
     }
 }

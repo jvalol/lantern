@@ -87,6 +87,8 @@ that decides whether the game is a decision or a walk.
 - An open side has no collider. — `walls::tests::an_open_side_is_walkable`
 - The colliders sit where the maze says the walls are. — `walls::tests::the_walls_are_where_the_maze_put_them`
 - A cell's floor is the size a cell is. — `walls::tests::a_cell_is_a_cell_wide`
+- A cell's ceiling sits on top of the walls. — `walls::tests::a_ceiling_sits_on_top_of_the_walls`
+- Neighbouring ceiling slabs meet, so there is no gap to see the dark through. — `walls::tests::the_ceiling_leaves_no_gap_between_cells`
 - Walking into a wall does not pass through it. — `player::tests::a_wall_stops_you`
 - Walking into a corner slides along it. — `player::tests::a_corner_turns_you`
 - Walking is relative to where you look. — `player::tests::forward_is_where_you_are_looking`
@@ -129,4 +131,4 @@ are dropped, so a ninth light is not an error, it is a lamp that stops working.
 ## Out of scope
 
 Anything on the walls but a texture: no doors, no levers, no things to pick up.
-A ceiling. Anything chasing you.
+Anything chasing you.
