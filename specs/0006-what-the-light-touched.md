@@ -93,6 +93,8 @@ read clearly.
 - A wall is drawn only between two recorded cells. — `minimap::tests::a_wall_needs_both_sides_recorded`
 - And lies on the edge between them, not through either. — `minimap::tests::a_wall_lies_on_the_edge_between_two_cells`
 - You are where you are on it. — `minimap::tests::you_are_where_you_are`
+- Your mark is not the colour a candle is. — `minimap::tests::you_do_not_look_like_a_candle`
+- And is dark enough to read against the floor. — `minimap::tests::you_stand_out_against_the_floor`
 - It sits clear of the text, whatever the window. — `minimap::tests::it_keeps_out_of_the_way_of_the_text`
 - M shows it and hides it. — `lantern_game::tests::the_map_key_shows_and_hides_it`
 - Carrying a candle writes down where you are standing. — `lantern_game::tests::carrying_a_candle_writes_where_you_are`

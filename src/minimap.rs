@@ -45,10 +45,18 @@ pub const CARD_PAD: f32 = 10.0;
 /// cell by cell later rather than one flat tone.
 pub const UNLIT: Vec4 = vec4(0.55, 0.58, 0.66, 0.14);
 pub const WALL: Vec4 = vec4(0.10, 0.11, 0.14, 0.85);
-/// You, in the one colour nothing else on the map uses. Warm against warm was
-/// the trouble: a candle mark and a player mark in the same amber read as two
-/// candles.
-pub const YOU: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
+/// You, in the one colour nothing else on the map uses.
+///
+/// Warm against warm was the first trouble: a candle mark and a player mark in
+/// the same amber read as two candles. White fixed that and made another, which
+/// is that the floor is nearly white itself and a white mark on it is a mark
+/// you have to look for.
+///
+/// Blue rather than red. Red is the stronger contrast against a pale floor, but
+/// it is a neighbour of the candles' amber at four pixels across, and telling
+/// yourself from a candle is the whole job of this mark. Nothing else here is
+/// blue, and it is dark enough to read against the floor as well.
+pub const YOU: Vec4 = vec4(0.05, 0.16, 0.92, 1.0);
 
 /// How much of a cell you take up, and how far the point reaches past you.
 const YOU_WIDE: f32 = 0.45;
@@ -550,6 +558,16 @@ mod tests {
     #[test]
     fn you_do_not_look_like_a_candle() {
         assert_ne!(YOU, CANDLE, "you and your candles are the same colour");
+    }
+
+    #[test]
+    fn you_stand_out_against_the_floor() {
+        // perceived brightness, not a channel: the floor is pale and a mark of
+        // its own brightness is a mark you have to hunt for
+        let bright = |c: Vec4| 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z;
+
+        let gap = bright(FLOOR) - bright(YOU);
+        assert!(gap > 0.5, "you are only {} off the floor", gap);
     }
 
     #[test]
