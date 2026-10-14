@@ -1,6 +1,6 @@
 # 0002 Walking it
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-09-29
 
 ## Goal

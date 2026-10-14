@@ -1,6 +1,6 @@
 # 0001 The two lamps
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-09-29
 
 ## Goal
@@ -56,7 +56,7 @@ means having lit enough to know where you have not been.
 - There are loops, so a wrong turn is not always a dead end. — `maze::tests::there_are_loops`
 - Braiding leaves fewer dead ends than carving did. — `maze::tests::braiding_takes_out_about_half_the_dead_ends`
 - The exit is not next to the start. — `maze::tests::the_exit_is_not_on_the_doorstep`
-- Walls stop you. — `player::tests::a_wall_is_solid`
+- Walls stop you. — `player::tests::a_wall_stops_you`
 
 ### Verified by hand
 

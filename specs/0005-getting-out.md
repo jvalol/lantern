@@ -1,6 +1,6 @@
 # 0005 Getting out
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-09-29
 
 ## Goal

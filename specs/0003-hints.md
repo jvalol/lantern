@@ -1,6 +1,6 @@
 # 0003 Hints
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-09-29
 
 ## Goal
