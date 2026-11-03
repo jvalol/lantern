@@ -24,5 +24,5 @@ pub fn staged() -> bool {
 }
 
 fn main() {
-    start("lantern", Box::new(LanternGame::new()));
+    start("lantern", Box::new(LanternGame::new(staged())));
 }

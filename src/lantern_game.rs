@@ -135,8 +135,24 @@ pub fn hud_line(n: usize) -> glam::Vec2 {
 }
 
 impl LanternGame {
-    pub fn new() -> Self {
-        let maze = Maze::carve(&mut StdRng::from_entropy());
+    /// The seed a staged run carves its maze from.
+    ///
+    /// **A staged run exists to be photographed, and entropy is the wrong
+    /// thing to photograph.** Every screenshot of lantern was a different
+    /// maze, and so would every picture test be. Any seed does; this is
+    /// the first one tried.
+    const POSED_SEED: u64 = 11;
+
+    /// `staged` rather than a call to `crate::staged()`, so that a picture
+    /// test can ask for the photographed maze without putting
+    /// `--screenshot` in its own arguments. `main` passes what the
+    /// arguments say.
+    pub fn new(staged: bool) -> Self {
+        let maze = if staged {
+            Maze::carve(&mut StdRng::seed_from_u64(Self::POSED_SEED))
+        } else {
+            Maze::carve(&mut StdRng::from_entropy())
+        };
         // the braziers stand in the maze, so they stop you and stop a candle
         // the same way a wall does
         let route = Route::of(&maze);
@@ -218,7 +234,7 @@ impl LanternGame {
             ],
         };
 
-        if crate::staged() {
+        if staged {
             game.pose();
         }
 
@@ -329,7 +345,7 @@ impl LanternGame {
 
 impl Default for LanternGame {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
@@ -665,9 +681,52 @@ impl Game for LanternGame {
 mod tests {
     use super::*;
 
+    /// How big the picture is: the engine's own size, said once there and
+    /// read here, per its spec 0062.
+    const WIDE: u32 = blitzkit::picture::SIZE.0;
+    const TALL: u32 = blitzkit::picture::SIZE.1;
+
+    /// A candle put down and looked back at, held against a picture of it.
+    /// Spec 0007.
+    ///
+    /// **The staging was already here.** `--screenshot` puts a candle
+    /// down, walks away from it for `POSED_AWAY` seconds and turns round,
+    /// because a dark maze photographed from where you start is a picture
+    /// of the dark. That is the frame `refresh-screenshots` takes.
+    ///
+    /// **What was not here was the same maze twice.** It was carved from
+    /// entropy, so every screenshot was a different maze and a reference
+    /// could never have held against one. `POSED_SEED` carves the staged
+    /// maze and a real run is as random as it was.
+    ///
+    /// The pose walks on its own fixed sixtieths inside `new`, so there is
+    /// one `update` here at no time at all, which lights the lamps from
+    /// where the player ended up.
+    #[test]
+    fn a_candle_left_behind_looks_right() {
+        let reference =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pictures/left-behind.png");
+
+        blitzkit::picture::drawn_looks_right(&reference, (WIDE, TALL), |renderer| {
+            let mut game = LanternGame::new(true);
+            let mut geometry = Geometry::new();
+            let mut text = TextRenderer::new();
+            let sound = SoundSystem::new();
+            let mut scene = Scene::new();
+            let mut camera = Camera::new();
+
+            game.load(renderer);
+            game.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
+            game.update(0.0, &mut geometry, &mut text, &sound);
+            game.draw(&mut scene, &mut camera);
+
+            (scene, camera)
+        });
+    }
+
     #[test]
     fn the_hint_key_cycles_back_to_off() {
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         let press = |key| KeyboardInput::new(key, KeyboardKeyState::Pressed, false);
 
         assert_eq!(game.hint, Hint::Off);
@@ -690,7 +749,7 @@ mod tests {
     #[test]
     fn no_marks_once_you_are_out() {
         // nothing left to point at, whatever the setting
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         game.player = crate::player::Player::at(cell_centre(game.maze.exit));
 
         for hint in Hint::ALL {
@@ -710,7 +769,7 @@ mod tests {
     fn it_ends_when_you_walk_through_not_when_you_arrive() {
         // arriving happens a stride before the doorway and is over by the time
         // you walk through it, which is the wrong moment to end on
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         let (dx, dy) = game.maze.way_out().step();
         let out = vec3(dx as f32, 0.0, dy as f32);
 
@@ -726,7 +785,7 @@ mod tests {
 
     #[test]
     fn the_candles_go_out_when_you_do() {
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
 
         assert!(
             game.lit().iter().any(|light| light.casts),
@@ -747,7 +806,7 @@ mod tests {
 
     #[test]
     fn the_ending_is_centred_in_the_window() {
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         game.resized((800.0, 600.0));
 
         assert!(game.ending.centered);
@@ -763,7 +822,7 @@ mod tests {
         // the controls were one text with the whole sentence in it, which the
         // window wrapped into two lines a font size apart while every other
         // pair sat 32 apart. Two crammed lines with gaps either side.
-        let game = LanternGame::new();
+        let game = LanternGame::new(false);
         let lines = [
             game.readout.position,
             game.controls[0].position,
@@ -794,7 +853,7 @@ mod tests {
 
     #[test]
     fn the_map_key_shows_and_hides_it() {
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         let press = |key| KeyboardInput::new(key, KeyboardKeyState::Pressed, false);
 
         assert!(game.show_map, "it starts shown");
@@ -808,7 +867,7 @@ mod tests {
 
     #[test]
     fn carrying_a_candle_writes_where_you_are() {
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         let here = game.cell();
 
         assert!(
@@ -826,7 +885,7 @@ mod tests {
 
     #[test]
     fn one_cell_is_a_cell() {
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         let steps = game.maze.distances_from(game.maze.exit);
         let one_away = (0..maze::CELLS)
             .find(|cell| steps[*cell] == Some(1))
@@ -847,7 +906,7 @@ mod tests {
         use crate::maze::Side;
 
         for _ in 0..20 {
-            let game = LanternGame::new();
+            let game = LanternGame::new(false);
             let yaw = game.player.yaw;
             let side = Side::ALL
                 .iter()
@@ -872,14 +931,14 @@ mod tests {
 
     #[test]
     fn you_start_at_the_door() {
-        let game = LanternGame::new();
+        let game = LanternGame::new(false);
 
         assert_eq!(game.cell(), game.maze.start);
     }
 
     #[test]
     fn space_puts_one_down_and_takes_it_back() {
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         let here = game.cell();
         let press = |key| KeyboardInput::new(key, KeyboardKeyState::Pressed, false);
 
@@ -895,7 +954,7 @@ mod tests {
     fn space_takes_up_before_it_puts_down() {
         // standing at a candle with one still in hand, you want the one at your
         // feet rather than a second one beside it
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         let here = game.cell();
         game.lamps.put_down(here);
         let press = |key| KeyboardInput::new(key, KeyboardKeyState::Pressed, false);
@@ -907,7 +966,7 @@ mod tests {
 
     #[test]
     fn escape_lets_the_cursor_go_before_it_quits() {
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         game.locked = true;
         let press = |key| KeyboardInput::new(key, KeyboardKeyState::Pressed, false);
 
@@ -922,7 +981,7 @@ mod tests {
 
     #[test]
     fn losing_focus_stops_you_walking() {
-        let mut game = LanternGame::new();
+        let mut game = LanternGame::new(false);
         game.held = [true; 6];
 
         game.focus_changed(false);
