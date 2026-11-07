@@ -15,7 +15,3 @@ not a priority, and it never changes once a spec exists.
 | [0005](0005-getting-out.md) | Grass to walk out onto, and the candles going out |
 | [0006](0006-what-the-light-touched.md) | A map of what your own light has fallen on, and nothing else |
 | [0007](0007-a-picture-of-a-candle-left-behind.md) | The staged candle held against a picture of it, carved from a seed so two runs agree |
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.
